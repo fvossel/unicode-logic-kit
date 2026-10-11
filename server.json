@@ -3,7 +3,7 @@
   "name": "io.github.fvossel/unicode-logic-kit",
   "title": "Unicode Logic Kit",
   "description": "Parse, check, prove and translate logic formulas: first-order, modal, description, higher-order.",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "repository": {
     "url": "https://github.com/fvossel/unicode-logic-kit",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "unicode-logic-kit",
-      "version": "0.32.0",
+      "version": "0.33.0",
       "runtimeHint": "uvx",
       "runtimeArguments": [
         {
@@ -25,7 +25,7 @@
         {
           "type": "named",
           "name": "--with",
-          "value": "unicode-logic-kit[mcp]==0.32.0",
+          "value": "unicode-logic-kit[mcp]==0.33.0",
           "description": "The server needs the package's mcp extra (the MCP SDK)."
         }
       ],

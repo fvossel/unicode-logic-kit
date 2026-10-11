@@ -7,6 +7,80 @@ breaking changes.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-10-11
+
+The fuzzy connectives combine with the order, the modal family and sorts. `fuzzy=True` next to the three choices of a classical mode gives twelve fuzzy modes, of which ten are new: the modal operators, the predicate quantifiers `∀P` / `∃P` and a predicate in argument position stand over the Łukasiewicz connectives, with or without sorts. Each has a meaning as far as this release carries it. A fuzzy modal formula is evaluated over a fuzzy Kripke model, quantifiers included, and searched for a countermodel with a bounded number of worlds. A predicate quantifier is the exact infimum or supremum over the FUZZY interpretations of its predicate, in the evaluators and in the deciders. A third-order atom is a letter named by its written form, or is computed by a function of the caller; a quantifier over a predicate in argument position is refused by name. The grammar of every mode that existed is byte for byte the one of 0.32.0. One defect of earlier versions is fixed on the way (see "Fixed"): a quantified variable inside a lambda term in argument position was not instantiated.
+
+### `MSFLParser` — `fuzzy` combines with the order, `modal` and `many_sorted`
+
+| order | `fuzzy=True` | + `many_sorted=True` | + `modal=True` | + `modal=True, many_sorted=True` |
+|---|---|---|---|---|
+| first | 0.32.0 (FL) | 0.32.0 (MSFL) | **new** | **new** |
+| `second_order=True` | **new** | **new** | **new** | **new** |
+| `third_order=True` | **new** | **new** | **new** | **new** |
+
+In 0.32.0 each of the ten was a `ValueError`. A fuzzy mode is the classical mode of the same three choices with its connectives exchanged: `¬ ∧ ∨ → ↔` build `LukNegation`, `WeakConjunction`, `WeakDisjunction`, `LukImplication`, `LukEquivalence`, `⊕` is the strong disjunction (not exclusive or), and `⊗` the strong conjunction. A formula over `¬ ∧ ∨ → ↔` is read by a fuzzy mode as the classical mode reads it, with the fuzzy node at each connective, and the two print the same text. What is not a connective comes from the classical mode unchanged: the whole modal family (so a bare lower-case word is a nominal in every fuzzy modal mode, and `∀ P(x)` reads as `∀P` over the nominal `x` there, as in the classical ones), the predicate quantifier with its arity read from the body, and at third order the argument layer and the typing of the slots. The forms whose reading is two-valued are in no fuzzy mode, as they were in none of FL and MSFL: the counting quantifier `∃≥n`, `but`, the measure term `μ(…)` and the cardinality term `|{x : φ}|`.
+
+`MSFLParser(third_order=True, second_order=True)` is still a `ValueError`; its message no longer names `fuzzy`. The standalone logics (`dependence`, `linear`, `lambek`) take no other flag, as before.
+
+### `satisfies_fuzzy_modal` — quantifiers over a constant domain
+
+`FuzzyKripkeModel` takes `domain=` (the constant names `∀x` / `∃x` range over) and `sort_universes=` (those of `∀x:S` / `∃x:S`), the same sets at every world. An individual quantifier is the infimum or supremum of its instances, as `fuzzy_evaluate` reads it, and an agent bound by a quantifier (`∀a K_a P`) is each individual in turn. The domain is constant, the setting of Hájek's fuzzy modal predicate logics, so the Barcan formula and its converse have degree 1. A quantifier in a model without its universe raises `ValueError` (0.32.0: `NotImplementedError` for every quantifier), and a sorted constant that the universe of its sort does not hold is refused as in `fuzzy_evaluate`.
+
+### `fuzzy_modal_search` — a bounded search for a countermodel
+
+`fuzzy_modal_search(formula, tnorm=, frame=, systems=, max_worlds=, crisp_frame=, domain=, sort_universes=, timeout=)` looks for a fuzzy Kripke model in which the formula has a degree below 1 at world 0. For each size up to `max_worlds` the edge weights and atom degrees are unknown reals in `[0, 1]`, and Z3 decides whether some choice gives a degree below 1: the Łukasiewicz and the Gödel connectives are piecewise linear, so a size is decided exactly. A model that is found has its degree computed again by `satisfies_fuzzy_modal` before it is reported. `fuzzy_modal_countermodel` returns the model alone; `FuzzyModalSearchResult.to_dict()`, `fuzzy_kripke_model_to_dict` and `fuzzy_kripke_model_from_dict` carry a result and a model as JSON. All five names are exported at the top level.
+
+- `frame=` (for `□` / `◇`) and `systems={"epistemic": …, "doxastic": …}` (for `K_a` / `B_a`) name a frame whose conditions are among reflexive, symmetric, transitive, serial and euclidean. Each is read in its graded form, with `⊗` the t-norm: `R(w, w) = 1`; `R(w, v) = R(v, w)`; `R(w, v) ⊗ R(v, u) ≤ R(w, u)`; some `v` with `R(w, v) = 1`; `R(w, v) ⊗ R(w, u) ≤ R(v, u)`. The axioms T, B, 4, D and 5 have degree 1 under them and a countermodel in K (with one world for T and D, with two for 4, B and 5). A frame with another condition (`"GL"`) raises `NotImplementedError`.
+- `crisp_frame=True` restricts every weight to 0 and 1. The axiom K shows the difference: over a fuzzy relation it has a countermodel under Łukasiewicz (one world that sees itself with weight 1/2, `P = 1/2`, `Q = 0`: degree 1/2), over a crisp relation it has none, and under Gödel it has none over any relation.
+- The result tells four outcomes apart: a countermodel (`model`, `degree`), `exhausted` (every size up to the bound decided, none has a countermodel), `timed_out` (Z3 did not decide a size in `timeout` milliseconds) and `unsupported` (the formula is outside the fragment; the message of its refusal).
+- `exhausted` is not validity. Under Gödel it cannot become validity by a larger bound: `□¬¬P → ¬¬□P` has degree 1 in every finite model and degree 0 in an infinite one, because the logic of `□` over `[0, 1]`-valued Gödel Kripke models has no finite model property (Caicedo and Rodríguez, "Standard Gödel modal logics", *Studia Logica* 94(2), 2010). The search reports "no countermodel with at most n worlds" for it at every n.
+
+### Predicate quantifiers over fuzzy interpretations
+
+`∀P φ` is the infimum of `φ` over every assignment of a degree in `[0, 1]` to each ground atom of `P` that `φ` reads, and `∃P φ` the supremum. This is an optimum over a real cube. It is stated in linear real arithmetic as the greatest lower bound itself and decided by Z3, so the degree is exact, also where the infimum is approached and not reached and where quantifiers alternate.
+
+- `fuzzy_evaluate` computes it: `∀P (P ∨ ¬P)` is 1/2 under Łukasiewicz (the infimum of `max(p, 1 − p)`) and 0 under Gödel (approached, never reached); comprehension, `∃P ∀x (P(x) ↔ Q(x))`, is 1 for every `Q`. The interpretations are fuzzy and not crisp, which is what makes comprehension hold: over crisp `P` it would be 1/2 for a `Q` of degree 1/2.
+- `satisfies_fuzzy_modal` computes it over a model. A bound predicate is an intension, as in the two-valued evaluator, with a degree of its own at each world. The frame conditions of correspondence theory get a degree: `∀P (□P → P)` at a world has exactly the weight with which the world sees itself, and `∀P (□P → □□P)` the infimum over `v` and `u` of `(R(w, v) ⊗ R(v, u)) → R(w, u)`, the degree of the worst missing shortcut. `fuzzy_modal_search` searches such formulas; a universal predicate quantifier at the root costs it no quantifier in the arithmetic.
+- `fuzzy_is_valid`, `fuzzy_is_satisfiable`, `fuzzy_get_model` and `degree_expr` take it. `∀P (P ⊕ ¬P)` is valid and `∀P (P ∨ ¬P)` is not; `∀P P` is the bottom degree, so `(∀P P) → Q` is valid; a model holds the free atoms only.
+- The t-norm is Łukasiewicz or Gödel. Under the product t-norm, which is not linear, a predicate quantifier raises `NotImplementedError` (every other formula evaluates under it as before).
+- A decider refuses a formula whose bound predicates are applied to two different terms unless every one of them is a name of the declared `domain` / `sort_universes`. `∃P (P(alice) ⊗ ¬P(bob))` says that the two differ; read with each term as its own individual it is valid, and in a model in which both name one individual it has degree 0. The evaluation of one valuation, which is one model, is not affected. `modal_enum_search` refuses such a formula for the same reason since 0.32.0.
+
+### Third-order atoms in the fuzzy routes
+
+`Pos(G)` and `Pos(λx. ¬G(x))` are atoms with a property as an argument. The evaluators and the deciders read such an atom as a letter named by its written form: the property is taken by name. So a formula the deciders report valid is valid whatever the third-order predicate is, and a model they report may give `Pos(G)` and `Pos(H)` different degrees although `G` and `H` agree everywhere. `fuzzy_evaluate(…, functionals={"Pos": f})` computes the atom instead: `f` receives a property argument as a function from constant names to degrees (`G` as the degrees of its atoms, `λx. φ` as the degree of `φ` at each name) and an individual argument as the name of its term. A predicate quantifier that binds a predicate standing in argument position raises `NotImplementedError`, with or without a functional.
+
+### Fixed
+
+- **A quantified variable inside a lambda term in argument position was not instantiated** by `fuzzy_evaluate`, `fuzzy_is_valid` / `fuzzy_is_satisfiable` / `fuzzy_get_model`, `semantics.fuzzy.ground_quantifiers`, `kleene_value`, `semantics.manyvalued.is_valid` / `is_satisfiable` / `entails`, and `matrix_value` / `matrix_is_valid` / `matrix_is_satisfiable` / `matrix_entails` (0.27.0 to 0.32.0, since third-order atoms exist). The instance of `∀x Pos(λy. R(x, y))` at `alice` was the letter `Pos(λy. R(x, y))`, the same for every individual, and not `Pos(λy. R(alice, y))`. So the evaluators read a valuation key that still held the variable, and the deciders took all instances for one letter: `(∃x Pos(λy. R(x, y))) → (∀x Pos(λy. R(x, y)))` was reported valid over two individuals by the LP deciders (`semantics.manyvalued.is_valid`, `matrix_is_valid`) and, built from Łukasiewicz nodes, by `fuzzy_is_valid`, although the letter of one individual may be true and that of the other false. A result obtained with one of these functions for a formula of this shape should be computed again. A formula without a lambda term in argument position is not affected.
+- `semantics.fuzzy.ground_quantifiers` left a quantifier under a node that is no Łukasiewicz connective in place: `□∀x P(x)`, built by hand, came back unchanged. It now grounds under every node.
+
+### Changed messages
+
+- The two-valued modal routes (`satisfies_modal`, `standard_translation`, and through it `modal_enum_search`) name the fuzzy routes where they refuse a Łukasiewicz connective; the text "fuzzy modal logic is future work" is gone.
+- `fuzzy_evaluate` and the Z3 deciders refuse a modal operator with a `TypeError` that says where a modal formula has a degree (0.32.0: `unsupported node type Box`).
+- The `RuntimeError` of a Łukasiewicz node that reaches the relativisation of sorts (`qml_is_valid`, the sorted higher-order writers) says that a two-valued route was given a fuzzy formula and names the fuzzy routes.
+- `satisfies_fuzzy_modal` words its refusal of a temporal, hybrid, announcement, group-epistemic or deontic operator without the word "v1".
+
+### Documentation
+
+The fuzzy guide has the fuzzy modes, quantifiers over a constant domain, the search with its frames and the Gödel formula that has no finite countermodel, a section "Predicate quantifiers" (the degree, the deciders, two terms and one individual, predicate quantifiers at worlds) and a section "Third-order atoms". The parsing guide has the table of the twelve fuzzy modes; the pages on second-order, third-order and modal logic and the overview of the logics say what `fuzzy=True` gives there.
+
+### Tests
+
+619 tests in six new files (`test_fuzzy_mode_combinations.py`, `test_fuzzy_kripke_quantifiers.py`, `test_fuzzy_modal_search.py`, `test_fuzzy_predicate_quantifiers.py`, `test_fuzzy_third_order.py`, `test_a_quantified_variable_inside_a_lambda_argument.py`). The expected degrees are derived by hand in the comments; the exact arithmetic is compared with the float evaluator on random formulas and models, and "no countermodel up to the bound" with random models of the frame class. The tests that pinned the refusals of 0.32.0 state the new behaviour, and the comparison of the two parser tables on the FOLIO corpus covers the ten new modes.
+
+### Limits
+
+- Of the modal family, the graded semantics reads `□ ◇ K_a B_a Say_a Want_a`. The temporal, hybrid, announcement, group-epistemic and deontic operators parse in a fuzzy modal mode and are refused by name by the evaluator and the search.
+- A fuzzy Kripke model has one domain for all worlds; there is no varying-domain reading.
+- `fuzzy_modal_search` bounds the number of worlds and proves no validity. `Says` and `Wants` have no frame condition, and a frame with a condition other than the five is refused.
+- Z3 does not always decide the quantified arithmetic of predicate quantifiers that alternate below the root of a formula within the time limit. `fuzzy_modal_search` reports that as `timed_out`, the evaluators raise `RuntimeError`, and `fuzzy_is_valid` / `fuzzy_is_satisfiable` answer `False`, as they do for every problem Z3 leaves undecided.
+- A predicate quantifier is computed under the Łukasiewicz and the Gödel t-norm only.
+- A third-order atom is computed by `functionals=` in `fuzzy_evaluate` only; `satisfies_fuzzy_modal` and the deciders read the letter. No route quantifies over a predicate in argument position.
+- The two-valued routes (`satisfies_modal`, `holds`, `holds_to`, the normal forms, the exports to provers, `hol.*`) refuse a formula of a fuzzy mode; there is no export of fuzzy modal or fuzzy higher-order formulas to a prover.
+- The command line `--mode`, `parse_any` and the tools of the MCP server do not offer the combined modes, fuzzy or classical; they are reached through `MSFLParser`.
+
 ## [0.32.0] - 2026-10-10
 
 The order, the modal family and sorts combine freely. A classical parser mode is three independent choices, the order (first, `second_order=True`, `third_order=True`), `modal=True` and `many_sorted=True`, and each of the twelve combinations is a mode. Four of them are new: second-order modal logic, with and without sorts, and third-order logic with sorts, with and without the modal family. Each has a meaning as well as a syntax: a predicate quantifier is evaluated over a Kripke model and covered by the bounded countermodel search, a sorted third-order formula is evaluated over a structure and written for Isabelle and for THF provers, and the higher-order modal embedding takes sorted formulas. `fuzzy=True` combines with `many_sorted` and with nothing else, as before. No text that was read before is read differently, and no formula that had a value has another. The package also has a command of its own name, `unicode-logic-kit`, whose first argument `mcp` starts the MCP server, so `uvx` runs the server without an install step and the entry for the MCP registry (`server.json`) has something to start.
