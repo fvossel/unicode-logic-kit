@@ -46,6 +46,17 @@ _LUK_NO_CLASSICAL_EXPORT = (
     "skeleton is really wanted, collapse explicitly with to_fol(node) first."
 )
 
+# What the relativisation of a fuzzy node adds to its refusal: relativisation is a
+# step of the two-valued routes (sorts as guards), and a fuzzy formula that reaches
+# it was given to one of them.
+_LUK_NO_TWO_VALUED_ROUTE = (
+    " A Łukasiewicz connective reached a two-valued route, which has no reading of "
+    "it. Evaluate the formula with semantics.fuzzy.evaluate (a modal one with "
+    "semantics.fuzzy_kripke.satisfies_fuzzy_modal), decide it with atp.z3_fuzzy, "
+    "or collapse it explicitly with to_fol(node) if the classical skeleton is "
+    "really wanted."
+)
+
 
 # =========================
 # MSFL Nodes
@@ -324,7 +335,7 @@ class WeakConjunction(Node):
         return And(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("WeakConjunction._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("WeakConjunction._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -363,7 +374,7 @@ class WeakDisjunction(Node):
         return Or(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("WeakDisjunction._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("WeakDisjunction._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -399,7 +410,7 @@ class StrongConjunction(Node):
         return And(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("StrongConjunction._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("StrongConjunction._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -435,7 +446,7 @@ class StrongDisjunction(Node):
         return Or(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("StrongDisjunction._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("StrongDisjunction._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -473,7 +484,7 @@ class LukNegation(Node):
         return Not(self.formula.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("LukNegation._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("LukNegation._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -512,7 +523,7 @@ class LukImplication(Node):
         return Implies(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("LukImplication._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("LukImplication._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""
@@ -551,7 +562,7 @@ class LukEquivalence(Node):
         return Iff(self.left.to_msfol(), self.right.to_msfol())
 
     def _relativize(self, facts: list) -> "Node":
-        raise RuntimeError("LukEquivalence._relativize called; call to_msfol() before _relativize.")
+        raise RuntimeError("LukEquivalence._relativize called; call to_msfol() before _relativize." + _LUK_NO_TWO_VALUED_ROUTE)
 
     def to_z3(self, env: Optional[Z3Env] = None):
         """Reject Z3 export: the classical collapse must be explicit (to_fol first)."""

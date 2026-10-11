@@ -143,8 +143,9 @@ print(verdict.status, verdict.backend, verdict.szs_status)  # proved z3 Theorem
 One parser class, `MSFLParser`, reads classical logic at the **first, second and third
 order**, each with or without **sorts** and with or without the **modal** family
 (modal/temporal/epistemic/deontic/hybrid): twelve combinations of three constructor
-flags. Next to them stand many-sorted and single-sorted Łukasiewicz fuzzy logic,
-team-semantic dependence/IF logic, intuitionistic linear logic, and the Lambek calculus.
+flags. A fourth flag, `fuzzy`, puts the Łukasiewicz connectives in place of the two-valued
+ones in each of the twelve. Next to them stand team-semantic dependence/IF logic,
+intuitionistic linear logic, and the Lambek calculus.
 The surface syntax is natural Unicode (`∀ ∃ ∧ ∨ ¬ → ↔ ⊕ ⊗ □ ◇ @ ⊸ 𝟙 …`) with no ASCII
 fallbacks.
 
@@ -207,6 +208,7 @@ as unavailable rather than silently disappearing.
 |---|---|---|
 | Classical FOL / MSFOL | `MSFLParser()` / `many_sorted=True` | resolution, Z3, Prover9/Vampire, tableaux, Fitch, LK, finite model finder |
 | Fuzzy Łukasiewicz / Gödel / product | `MSFLParser(fuzzy=True)` | `fuzzy_evaluate`, `fuzzy_is_valid(…, tnorm=…)` (Z3 reals, quantifier grounding; Łukasiewicz and Gödel only — the product t-norm is evaluator-only and `fuzzy_is_valid` refuses it by name); classical routes (`is_valid`, normal forms, resolution) refuse fuzzy input rather than silently collapsing it — opt in explicitly with `to_fol(node)` |
+| Fuzzy modal, second-order, third-order | `MSFLParser(fuzzy=True, modal=True)`, `second_order=True`, `third_order=True` | `satisfies_fuzzy_modal` (weighted edges, quantifiers over a constant domain), `fuzzy_modal_search` (a countermodel with at most n worlds, never a proof of validity); `∀P` / `∃P` as the exact infimum / supremum over fuzzy interpretations in `fuzzy_evaluate` and `fuzzy_is_valid`; a third-order atom as a letter or computed by `functionals=` |
 | Modal / temporal / epistemic / deontic | `MSFLParser(modal=True)` | `satisfies_modal`, `standard_translation`, native `is_modal_valid` / `modal_decide` (K…S5, B, KD45) |
 | Quantified modal | `KripkeModel(domains=…)` | `qml_is_valid` per domain regime + frame; THF / Isabelle export |
 | Many-valued K3 / LP / Belnap FDE | `truth_table`, `semantics.matrix` | `matrix_is_valid` / `matrix_entails` over any finite `TruthMatrix`, incl. THF/Isabelle export |

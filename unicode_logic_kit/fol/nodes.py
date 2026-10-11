@@ -242,6 +242,79 @@ for _mode in ("third_order_sorted", "third_order_modal_sorted"):
     _fn._MODE_ATOM_EXTRA.setdefault(_mode, _fn._ATOM_EXTRA_THIRD_ORDER)
 del _mode
 
+
+# =========================
+# The fuzzy combinations of order, modal operators and sorts
+# =========================
+#
+# A fuzzy mode differs from the classical mode of the same order, modality and
+# sorts in its connectives and in nothing else: ``¬ ∧ ∨ → ↔`` are the same glyphs
+# and build the Łukasiewicz nodes, ``⊕`` is the strong disjunction (not exclusive
+# or), and ``⊗`` is added. So each of the ten modes below takes its connectives
+# and its individual quantifier from "fl" ("msfl" over sorted individuals) and,
+# from the classical modes, only what is NOT a connective: the modal family and
+# the predicate quantifier. A classical connective taken along would give one
+# glyph two rules.
+#
+# The counting forms (``∃≥n``, ``but``) are left out with the connectives, as
+# they are out of "fl" and "msfl": their readings are two-valued. The measure and
+# cardinality terms are no part of "fl" either, so no fuzzy mode has them.
+_TWO_VALUED_ALIASES = frozenset({
+    "not_", "and_", "or_", "xor_", "implies_", "iff_",
+    "contrast_", "count_",
+    "quantifier_",      # the individual quantifier comes from "fl" / "msfl"
+})
+
+
+def _clone_parser_ops_fuzzy(target: str, connectives: str, sources) -> None:
+    """Assemble the fuzzy mode ``target``.
+
+    Every operator of ``connectives`` ("fl" or "msfl") is cloned, and of each mode in
+    ``sources`` every operator whose rule is not one of :data:`_TWO_VALUED_ALIASES`.
+    An operator that two of them register alike (the modal family is the same in
+    "modal" whatever else is cloned) is taken once.
+    """
+    seen = set()
+    for source in (connectives, *sources):
+        for op in parser_ops_for_mode(source):
+            if source != connectives and op.rule_alias in _TWO_VALUED_ALIASES:
+                continue
+            key = (op.level, op.rule_alias, op.grammar, op.only_name)
+            if key in seen:
+                continue
+            seen.add(key)
+            PARSER_OPS.append(ParserOp(
+                target, op.level, op.terminal_name, op.terminal_def,
+                op.grammar, op.rule_alias, op.transform, op.node_class,
+                op.only_name))
+
+
+#: The ten fuzzy modes that are not "fl" and "msfl": registry name -> (the mode the
+#: connectives come from, the classical modes the other operators come from).
+_FUZZY_COMBINATIONS = {
+    "fuzzy_modal": ("fl", ("modal",)),
+    "fuzzy_modal_sorted": ("msfl", ("modal",)),
+    "fuzzy_second_order": ("fl", ("second_order",)),
+    "fuzzy_second_order_sorted": ("msfl", ("second_order",)),
+    "fuzzy_second_order_modal": ("fl", ("modal", "second_order")),
+    "fuzzy_second_order_modal_sorted": ("msfl", ("modal", "second_order")),
+    "fuzzy_third_order": ("fl", ("second_order",)),
+    "fuzzy_third_order_sorted": ("msfl", ("second_order",)),
+    "fuzzy_third_order_modal": ("fl", ("modal", "second_order")),
+    "fuzzy_third_order_modal_sorted": ("msfl", ("modal", "second_order")),
+}
+
+for _mode, (_connectives, _sources) in _FUZZY_COMBINATIONS.items():
+    _clone_parser_ops_fuzzy(_mode, _connectives, _sources)
+    _fn._MODE_TERMINAL_IMPORTS.setdefault(_mode, _fn._MODE_TERMINAL_IMPORTS[_connectives])
+    if _connectives == "msfl":
+        _fn._SORTED_MODES = _fn._SORTED_MODES | {_mode}
+    if "third_order" in _mode:
+        # The argument layer of third order: a property may stand where a term may.
+        _fn._MODE_ATOM_ARGS.setdefault(_mode, "hoarglist")
+        _fn._MODE_ATOM_EXTRA.setdefault(_mode, _fn._ATOM_EXTRA_THIRD_ORDER)
+del _mode, _connectives, _sources
+
 __all__ = [
     "Z3Env",
     "Node",

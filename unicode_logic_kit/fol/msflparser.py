@@ -192,6 +192,13 @@ _REGISTRY_MODE = {
     "modal_sorted": "modal_sorted", "so_sorted": "so_sorted",
     "somodal": "second_order_modal", "somodal_sorted": "second_order_modal_sorted",
     "to_sorted": "third_order_sorted", "tomodal_sorted": "third_order_modal_sorted",
+    "flmodal": "fuzzy_modal", "flmodal_sorted": "fuzzy_modal_sorted",
+    "flso": "fuzzy_second_order", "flso_sorted": "fuzzy_second_order_sorted",
+    "flsomodal": "fuzzy_second_order_modal",
+    "flsomodal_sorted": "fuzzy_second_order_modal_sorted",
+    "flto": "fuzzy_third_order", "flto_sorted": "fuzzy_third_order_sorted",
+    "fltomodal": "fuzzy_third_order_modal",
+    "fltomodal_sorted": "fuzzy_third_order_modal_sorted",
     "dependence": "dependence", "linear": "linear", "lambek": "lambek",
 }
 
@@ -255,9 +262,11 @@ _PARSER_CACHE: dict = {}
 # they extend. The same line divides the other combinations: every mode that
 # holds the modal family (``somodal``, ``somodal_sorted``, ``tomodal_sorted``)
 # inherits the conflict and the fallback, and ``to_sorted`` parses with plain
-# LALR.
-_HYBRID_MODES = frozenset({"modal", "tomodal", "modal_sorted",
-                           "somodal", "somodal_sorted", "tomodal_sorted"})
+# LALR. A fuzzy mode has the nominal rule exactly when its classical
+# counterpart has it, so the line is the same there.
+_MODAL_FAMILY_MODES = frozenset({"modal", "tomodal", "modal_sorted",
+                                 "somodal", "somodal_sorted", "tomodal_sorted"})
+_HYBRID_MODES = _MODAL_FAMILY_MODES | {"fl" + mode for mode in _MODAL_FAMILY_MODES}
 
 
 # Modes carrying the agent-indexed epistemic/doxastic operators, whose free
@@ -265,14 +274,14 @@ _HYBRID_MODES = frozenset({"modal", "tomodal", "modal_sorted",
 # ``resolve_agent_variables`` (fol/_modal_nodes.py) already tracks a bound
 # object variable through SortedQuantifier as well as plain Quantifier, so
 # ``modal_sorted`` needs no separate handling beyond being listed here.
-_AGENT_MODES = frozenset({"modal", "tomodal", "modal_sorted",
-                          "somodal", "somodal_sorted", "tomodal_sorted"})
+_AGENT_MODES = _HYBRID_MODES
 
 # The third-order modes, whose formulas are TYPE-CHECKED after the parse:
 # an argument slot holds an individual or a property, never both, and only
 # these modes can express the difference in the first place. A sorted constant
 # ``c:S`` in a slot is an individual, like a plain one.
-_THIRD_ORDER_MODES = frozenset({"to", "tomodal", "to_sorted", "tomodal_sorted"})
+_THIRD_ORDER_MODES = frozenset({"to", "tomodal", "to_sorted", "tomodal_sorted",
+                                "flto", "fltomodal", "flto_sorted", "fltomodal_sorted"})
 
 
 def _cached_parser(registry_mode: str, kind: str) -> Lark:
@@ -700,14 +709,21 @@ class MSFLParser:
         many_sorted: if True, quantifiers and constants must carry sort
             annotations (e.g. ``∀x:Human P(x)``, ``alice:Human``).
         fuzzy: if True, use Łukasiewicz operators (⊗ ⊕ for strong
-            conjunction/disjunction; ¬ → ↔ map to Łukasiewicz nodes).
+            conjunction/disjunction; ¬ → ↔ map to Łukasiewicz nodes). Combines
+            with ``many_sorted``, ``modal``, ``second_order`` and
+            ``third_order``: a fuzzy mode has the connectives of ``fuzzy=True``
+            and, of the other flags, the operators that are no connective (the
+            modal family, the predicate quantifier, a predicate in argument
+            position). The counting quantifier, ``but``, and the measure and
+            cardinality terms have a two-valued reading and are in no fuzzy
+            mode.
         modal: if True, parse FOL extended with modal, epistemic, doxastic,
             temporal, and deontic operators (□ ◇ K_a B_a Ⓖ Ⓕ Ⓝ Ⓤ Ⓞ Ⓟ) over
             classical unsorted quantifiers/constants, or — combined with
             many_sorted=True — over SORTED quantifiers/constants (every
             binder then requires a sort annotation, exactly like plain
-            MSFOL: ``□∀x:Human (Mortal(x))``). Combines with ``second_order``
-            and ``third_order``; cannot be combined with fuzzy.
+            MSFOL: ``□∀x:Human (Mortal(x))``). Combines with ``second_order``,
+            ``third_order`` and ``fuzzy``.
         second_order: if True, parse classical FOL extended with
             second-order quantifiers over predicate variables (∀P / ∃P, where P
             is an uppercase PREDICATE; the bound predicate's arity is inferred
@@ -716,8 +732,8 @@ class MSFLParser:
             many_sorted=True — over SORTED ones (the predicate quantifier
             itself stays unsorted; only the ∀x/∃x individual binders and bare
             constants need a sort). Combines with ``modal=True`` (second-order
-            modal logic: ``∀P (□P → P)``), with and without sorts; cannot be
-            combined with fuzzy.
+            modal logic: ``∀P (□P → P)``), with and without sorts, and with
+            ``fuzzy=True``.
         third_order: if True, parse second-order syntax extended with predicates
             in ARGUMENT position — ``Positive(G)``, ``Essence(G, x)``,
             ``Positive(λx. ¬G(x))``, which parse to an Atom over a
@@ -727,8 +743,8 @@ class MSFLParser:
             with ``modal=True`` (third-order modal logic — the setting Gödel's
             ontological argument is stated in) and with ``many_sorted=True``
             (the individual binders and constants carry sorts; a property and a
-            predicate quantifier stay unsorted); not with ``second_order`` (which
-            it contains) or ``fuzzy``.
+            predicate quantifier stay unsorted) and with ``fuzzy=True``; not
+            with ``second_order`` (which it contains).
         dependence: if True, parse the team-semantic dependence/IF fragment —
             literals, ∧, splitting ∨, ∀/∃, dependence atoms ``=(x, y)``, and
             slashed existentials ``∃y/{x} φ``. Standalone (no other flag).
@@ -763,6 +779,12 @@ class MSFLParser:
     property argument range over the relations on the whole domain. So the
     third-order typing of a slot (an individual, or a property of some arity)
     is the same with and without sorts.
+
+    ``fuzzy=True`` next to the same three choices gives twelve more modes, FL
+    and MSFL among them, named by the classical mode with ``fl`` before it
+    (``flmodal``, ``flso_sorted``, ``fltomodal`` …). A fuzzy mode is the
+    classical mode of the same choices with the Łukasiewicz connectives in
+    place of the two-valued ones, and without the counting forms.
     """
 
     def __init__(self, many_sorted: bool = False, fuzzy: bool = False,
@@ -786,39 +808,23 @@ class MSFLParser:
             self._mode = "linear"
         elif lambek:
             self._mode = "lambek"
-        elif third_order:
-            if fuzzy or second_order:
+        elif third_order or second_order or modal:
+            if third_order and second_order:
                 raise ValueError(
-                    "third_order=True cannot be combined with fuzzy or "
-                    "second_order; third-order mode already CONTAINS "
-                    "second-order syntax (∀P / ∃P) and adds predicates in "
-                    "argument position on top of it. Combine it with modal=True "
-                    "for third-order modal logic and with many_sorted=True for "
-                    "sorted individual binders and constants."
+                    "third_order=True cannot be combined with second_order; "
+                    "third-order mode already CONTAINS second-order syntax "
+                    "(∀P / ∃P) and adds predicates in argument position on top "
+                    "of it. Combine it with modal=True for third-order modal "
+                    "logic, with many_sorted=True for sorted individual binders "
+                    "and constants, and with fuzzy=True for the Łukasiewicz "
+                    "connectives."
                 )
-            self._mode = "tomodal" if modal else "to"
+            order = "to" if third_order else "so" if second_order else ""
+            self._mode = order + "modal" if modal else order
+            if fuzzy:
+                self._mode = "fl" + self._mode
             if many_sorted:
                 self._mode += "_sorted"
-        elif second_order:
-            if fuzzy:
-                raise ValueError(
-                    "second_order=True cannot be combined with fuzzy; "
-                    "second-order mode is FOL plus second-order quantifiers "
-                    "over predicate variables. Combine it with modal=True for "
-                    "second-order modal logic and with many_sorted=True for "
-                    "sorted individual binders and constants."
-                )
-            self._mode = "somodal" if modal else "so"
-            if many_sorted:
-                self._mode += "_sorted"
-        elif modal:
-            if fuzzy:
-                raise ValueError(
-                    "modal=True cannot be combined with fuzzy in v1; modal mode "
-                    "is FOL plus modal operators (optionally many-sorted, via "
-                    "many_sorted=True)."
-                )
-            self._mode = "modal_sorted" if many_sorted else "modal"
         elif not many_sorted and not fuzzy:
             self._mode = "fol"
         elif many_sorted and not fuzzy:

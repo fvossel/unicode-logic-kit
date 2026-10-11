@@ -1,6 +1,6 @@
-"""Graded (fuzzy) Kripke semantics: a truth-DEGREE evaluator for propositional
-modal logic over a t-norm, generalising :mod:`kripke`'s two-valued
-satisfaction relation the way :mod:`fuzzy` generalises classical FOL.
+"""Graded (fuzzy) Kripke semantics: a truth-DEGREE evaluator for modal logic over a
+t-norm, generalising :mod:`kripke`'s two-valued satisfaction relation the way
+:mod:`fuzzy` generalises classical FOL.
 
 A :class:`FuzzyKripkeModel` is the graded analogue of
 :class:`~unicode_logic_kit.semantics.kripke.KripkeModel`: instead of a crisp
@@ -56,21 +56,39 @@ not :func:`~unicode_logic_kit.semantics.kripke.satisfies_modal`'s bool one):
   are ``all(...)``-quantified exactly like Box) over their own
   ``"K:"``/``"B:"``/``"Say:"``/``"Want:"``-prefixed relation, for free, via
   the same relation-name mechanism :mod:`kripke` documents.
+- ``∀x φ`` / ``∃x φ`` are the infimum / supremum of ``φ`` over the model's
+  ``domain``, and ``∀x:S φ`` / ``∃x:S φ`` over ``sort_universes[S]``, exactly as
+  :func:`~unicode_logic_kit.semantics.fuzzy.evaluate` reads them: an individual
+  is named by a constant, and the bound variable is replaced by each name in
+  turn. The domain is ONE set for every world (constant domains, the setting
+  of Hájek's fuzzy modal predicate logics); a model has no per-world domain.
+- ``∀P φ`` / ``∃P φ`` (``SecondOrderQuantifier``) are the infimum / supremum of
+  ``φ`` over every FUZZY interpretation of the bound predicate. A bound
+  predicate is an intension, as in :mod:`kripke`: it has a degree of its own
+  at each world for each of its ground atoms, so the quantifier ranges over
+  every assignment of a degree in ``[0, 1]`` to each of them. That is an
+  optimisation over a real cube, not an enumeration, and it is computed exactly
+  as linear real arithmetic by
+  :func:`~unicode_logic_kit.atp.z3_fuzzy_kripke.predicate_quantifier_degree`
+  (Łukasiewicz and Gödel; the product t-norm is not linear and is refused by
+  name). ``∀P (P ∨ ¬P)`` has degree ``1/2`` under Łukasiewicz: the infimum of
+  ``max(p, 1 − p)`` is reached at ``p = 1/2``.
+- A third-order atom (``Pos(G)``, a predicate in argument position) is a letter
+  of its own, looked up by its written form like any other atom: the property
+  is taken by NAME. So ``Pos(G)`` and ``Pos(H)`` are two letters even where
+  ``G`` and ``H`` have the same degrees everywhere, and a predicate quantifier
+  that binds a predicate standing in argument position is refused by name.
 
-**v1 scope** (deliberately narrow, matching
-:mod:`~unicode_logic_kit.semantics.kripke`'s own "propositional / ground, v1"
-discipline): exactly graded ``Box``/``Diamond``/``Knows``/``Believes``/
-``Says``/``Wants``, single-step aggregation, no fixpoints, plus the
-Łukasiewicz connectives. Every other node kind :mod:`kripke` interprets is
-REJECTED here by name by design, not silently approximated:
+**Scope.** The modal operators read are ``Box`` / ``Diamond`` / ``Knows`` /
+``Believes`` / ``Says`` / ``Wants``, each by one step of aggregation. Every
+other node kind :mod:`kripke` interprets is refused by name, not approximated:
 
 - classical crisp connectives (``Not``/``And``/``Or``/``Implies``/``Iff``/
   ``Xor``) — a formula meant for graded evaluation must be built with fuzzy
   connective nodes, the same discipline :mod:`fuzzy` already enforces for
   non-modal formulas;
-- ``Quantifier``/``SortedQuantifier`` and the lambda-calculus nodes, rejected
-  via :mod:`_modal_reject`'s shared ``reject_quantifier``/``reject_lambda``
-  (unchanged, so the message wording matches :mod:`kripke`'s own);
+- the lambda-calculus nodes in formula position, via :mod:`_modal_reject`'s
+  shared ``reject_lambda``;
 - temporal closure (``Next``/``Always``/``Eventually``/``Until``/
   ``Previous``/``Historically``/``Once``/``Since``), hybrid logic
   (``Nominal``/``At``), public announcement logic (``Announce``/
@@ -84,21 +102,23 @@ REJECTED here by name by design, not silently approximated:
   subset?) and must not be silently approximated by, say, reusing the crisp
   fixpoint machinery over a 0/1-thresholded relation.
 
-No parser change ships with this module: formulas are built via the Node API
-directly (``Box(WeakConjunction(Atom("P", []), Atom("Q", [])))``), exactly
-the precedent :mod:`~unicode_logic_kit.semantics.kripke` and
-``docs/guide/quantified-modal.md`` already set for modal ASTs — "no parser
-is involved" is a documented v1 limitation here too, not an oversight
-(``MSFLParser`` still refuses ``modal=True, fuzzy=True`` together).
+The formulas come from ``MSFLParser(fuzzy=True, modal=True)`` (with
+``many_sorted``, ``second_order`` or ``third_order`` as wanted), or from the Node
+API directly (``Box(WeakConjunction(Atom("P", []), Atom("Q", [])))``). The parser
+reads the whole modal family; the operators outside the scope above parse and
+are refused here. A search for a countermodel is
+:func:`~unicode_logic_kit.atp.z3_fuzzy_kripke.fuzzy_modal_search`.
 """
 
-from typing import Any, Dict, FrozenSet, Iterable, Mapping, NoReturn, Optional, Tuple
+from typing import (
+    Any, Collection, Dict, FrozenSet, Iterable, Mapping, NoReturn, Optional, Tuple, Union,
+)
 from types import MappingProxyType
 
 from ..fol.nodes import (
-    Node,
+    Node, Constant,
     Atom, Not, And, Or, Xor, Implies, Iff,
-    Quantifier, SortedQuantifier,
+    Quantifier, SortedQuantifier, SecondOrderQuantifier,
     Box, Diamond, Knows, Believes, Says, Wants,
     Always, Eventually, Next, Until,
     Historically, Once, Previous, Since,
@@ -107,7 +127,7 @@ from ..fol.nodes import (
     WeakConjunction, WeakDisjunction,
     StrongConjunction, StrongDisjunction,
     LukNegation, LukImplication, LukEquivalence,
-    LambdaVar, Lambda, Application,
+    substitute,
 )
 from ..fol._modal_nodes import (
     Announce, AnnounceDiamond,
@@ -116,13 +136,13 @@ from ..fol._modal_nodes import (
 from ..fol._atom_keys import find_key
 from ..fol._msfl_nodes import key_text
 from ..fol._truth_constants import truth_value as _truth_value
-from ._modal_reject import LAMBDA_TYPES, reject_quantifier, reject_lambda
+from ._modal_reject import LAMBDA_TYPES, reject_lambda
 from .tnorm import TNorm, LUKASIEWICZ
 
 # Note on _modal_reject reuse: that module's FUZZY_TYPES / reject_fuzzy
 # classify Łukasiewicz nodes as OUT OF SCOPE for the crisp Kripke evaluator —
 # here they are exactly the nodes this module interprets, so only
-# LAMBDA_TYPES / reject_lambda and reject_quantifier are reused from it.
+# LAMBDA_TYPES / reject_lambda are reused from it.
 
 # Relation-name prefixes, matching kripke.py's convention EXACTLY (the two
 # modules must stay in sync on these strings so the same relations= dict
@@ -147,6 +167,26 @@ def _agent_key(agent: Node) -> str:
     agent keys identically for the other.
     """
     return getattr(agent, "name", None) or key_text(agent)
+
+
+def relation_name(formula: Node) -> Optional[str]:
+    """The relation a modal operator of this module's scope is read over, or ``None``.
+
+    ``"alethic"`` for ``Box`` / ``Diamond``, and the agent's own relation
+    (``"K:" + agent``, ``"B:" + agent``, ``"Say:" + agent``, ``"Want:" + agent``) for
+    ``Knows`` / ``Believes`` / ``Says`` / ``Wants``. ``None`` for every other node.
+    """
+    if isinstance(formula, (Box, Diamond)):
+        return _ALETHIC
+    if isinstance(formula, Knows):
+        return _KNOWS_PREFIX + _agent_key(formula.agent)
+    if isinstance(formula, Believes):
+        return _BELIEVES_PREFIX + _agent_key(formula.agent)
+    if isinstance(formula, Says):
+        return _SAYS_PREFIX + _agent_key(formula.agent)
+    if isinstance(formula, Wants):
+        return _WANTS_PREFIX + _agent_key(formula.agent)
+    return None
 
 
 def _clamp(x: float) -> float:
@@ -193,11 +233,16 @@ class FuzzyKripkeModel:
             one) fixing the strong connectives AND the Box/Diamond residuum —
             reused UNMODIFIED from :mod:`tnorm`, never re-implemented here.
             Defaults to :data:`~unicode_logic_kit.semantics.tnorm.LUKASIEWICZ`.
+        domain: the constant names an unsorted quantifier ``∀x`` / ``∃x`` ranges
+            over, the same set at every world. ``None`` (the default) for a model
+            of formulas without one; a quantifier then raises ``ValueError``.
+        sort_universes: maps a sort name to the constant names ``∀x:S`` / ``∃x:S``
+            range over, the same set at every world.
 
     All mappings default to empty, so ``FuzzyKripkeModel({0, 1})`` is a valid
     (atom-free, relation-free, everywhere-0.0) frame. The constructor copies
-    every container into an immutable ``MappingProxyType`` view, so later
-    edits to the caller's structures never leak in.
+    every container into an immutable view, so later edits to the caller's
+    structures never leak in.
     """
 
     def __init__(
@@ -206,6 +251,8 @@ class FuzzyKripkeModel:
         relations: Optional[Mapping[str, Mapping[Edge, float]]] = None,
         valuation: Optional[Mapping[World, Mapping[str, float]]] = None,
         tnorm: TNorm = LUKASIEWICZ,
+        domain: Optional[Iterable[str]] = None,
+        sort_universes: Optional[Mapping[str, Iterable[str]]] = None,
     ):
         if not isinstance(tnorm, TNorm):
             raise TypeError(
@@ -222,14 +269,24 @@ class FuzzyKripkeModel:
             for world, degrees in (valuation or {}).items()
         }
         self.tnorm: TNorm = tnorm
+        self.domain: Optional[FrozenSet[str]] = None if domain is None else frozenset(domain)
+        self.sort_universes: Optional[Mapping[str, FrozenSet[str]]] = (
+            None if sort_universes is None else MappingProxyType(
+                {sort: frozenset(names) for sort, names in sort_universes.items()}))
 
     def __repr__(self) -> str:
         """Show world count and the relation / valuation tables for inspection."""
+        individuals = ""
+        if self.domain is not None:
+            individuals += f", domain={set(self.domain)!r}"
+        if self.sort_universes is not None:
+            individuals += (
+                f", sort_universes={ {k: set(v) for k, v in self.sort_universes.items()} !r}")
         return (
             f"FuzzyKripkeModel(worlds={set(self.worlds)!r}, "
             f"relations={ {k: dict(v) for k, v in self.relations.items()} !r}, "
             f"valuation={ {k: dict(v) for k, v in self.valuation.items()} !r}, "
-            f"tnorm={self.tnorm.name!r})"
+            f"tnorm={self.tnorm.name!r}{individuals})"
         )
 
     def relation_weight(self, name: str, w1: World, w2: World) -> float:
@@ -270,7 +327,7 @@ def _residuated_box(rel_name: str, formula: Node, model: FuzzyKripkeModel, world
     t = model.tnorm
     return min(
         t.impl(model.relation_weight(rel_name, world, w2),
-               satisfies_fuzzy_modal(formula, model, w2))
+               _degree(formula, model, w2))
         for w2 in domain
     )
 
@@ -289,7 +346,7 @@ def _tnorm_diamond(rel_name: str, formula: Node, model: FuzzyKripkeModel, world:
     t = model.tnorm
     return max(
         t.conj(model.relation_weight(rel_name, world, w2),
-               satisfies_fuzzy_modal(formula, model, w2))
+               _degree(formula, model, w2))
         for w2 in domain
     )
 
@@ -299,7 +356,7 @@ def _tnorm_diamond(rel_name: str, formula: Node, model: FuzzyKripkeModel, world:
 _CLASSICAL_CONNECTIVES = (Not, And, Or, Xor, Implies, Iff)
 
 # Out-of-scope modal node families, rejected BY NAME with a category label
-# (see the module docstring's "v1 scope" section for why each is excluded).
+# (see the module docstring's "Scope" section for why each is excluded).
 _TEMPORAL_TYPES = (Next, Always, Eventually, Until, Previous, Historically, Once, Since)
 _HYBRID_TYPES = (Nominal, At)
 _PAL_TYPES = (Announce, AnnounceDiamond)
@@ -308,34 +365,108 @@ _GROUP_EPISTEMIC_TYPES = (EverybodyKnows, DistributedKnowledge, CommonKnowledge)
 
 
 def _reject_out_of_scope(formula: Node, caller: str, category: str) -> NoReturn:
-    """Reject a modal node family the graded evaluator does not interpret in v1.
+    """Reject a modal node family the graded evaluator does not interpret.
 
     Names both the offending node TYPE and the CATEGORY it belongs to, and
     states the reason (a graded fixpoint/model-update/group-combinator over a
     continuous t-norm is open research, not a silently-approximable detail) —
-    see the module docstring's "v1 scope" section.
+    see the module docstring's "Scope" section.
     """
     raise NotImplementedError(
         f"{caller}: {type(formula).__name__} ({category}) is not supported by "
-        "the graded (fuzzy) Kripke evaluator — v1 covers exactly graded "
-        "Box/Diamond/Knows/Believes/Says/Wants with single-step aggregation, "
-        "no fixpoints; graded temporal closure, hybrid logic, public "
+        "the graded (fuzzy) Kripke semantics, which reads "
+        "Box/Diamond/Knows/Believes/Says/Wants with single-step aggregation "
+        "and no fixpoints; graded temporal closure, hybrid logic, public "
         "announcement model updates, group-epistemic combinators, and "
         "deontic serial-frame reasoning over a continuous t-norm are open "
         "research questions in their own right and must not be silently "
-        "approximated. This is future work, tracked the same way "
-        "kripke.py/_modal_reject.py track quantified/lambda modal logic."
+        "approximated."
     )
+
+
+def refuse_node(formula: Node, caller: str) -> NoReturn:
+    """Refuse, by name, a node the graded Kripke semantics has no reading of.
+
+    The one list of refusals for :func:`satisfies_fuzzy_modal` and for the routes of
+    :mod:`~unicode_logic_kit.atp.z3_fuzzy_kripke`, so that what one of them refuses the
+    others refuse in the same words.
+
+    Raises:
+        TypeError: ``formula`` is a classical crisp connective.
+        NotImplementedError: every other node.
+    """
+    if isinstance(formula, _CLASSICAL_CONNECTIVES):
+        raise TypeError(
+            f"Classical connective {type(formula).__name__} is not valid in graded "
+            "modal input; build the formula with Łukasiewicz connective nodes "
+            "(LukNegation/WeakConjunction/WeakDisjunction/StrongConjunction/"
+            "StrongDisjunction/LukImplication/LukEquivalence) instead — the same "
+            "discipline unicode_logic_kit.semantics.fuzzy already enforces for "
+            "non-modal formulas."
+        )
+    if isinstance(formula, LAMBDA_TYPES):
+        reject_lambda(formula, caller)
+    if isinstance(formula, _TEMPORAL_TYPES):
+        _reject_out_of_scope(formula, caller, "temporal")
+    if isinstance(formula, _HYBRID_TYPES):
+        _reject_out_of_scope(formula, caller, "hybrid")
+    if isinstance(formula, _PAL_TYPES):
+        _reject_out_of_scope(formula, caller, "public announcement logic")
+    if isinstance(formula, _GROUP_EPISTEMIC_TYPES):
+        _reject_out_of_scope(formula, caller, "group-epistemic")
+    if isinstance(formula, _DEONTIC_TYPES):
+        _reject_out_of_scope(formula, caller, "deontic")
+    raise NotImplementedError(
+        f"{caller}: unsupported node type {type(formula).__name__}."
+    )
+
+
+def quantifier_universe(node: Union[Quantifier, SortedQuantifier],
+                        domain: Optional[Collection[str]],
+                        sort_universes: Optional[Mapping[str, Collection[str]]],
+                        caller: str) -> Tuple[str, ...]:
+    """The constant names an individual quantifier ranges over, in sorted order.
+
+    ``domain`` for an unsorted ``Quantifier``, ``sort_universes[sort]`` for a
+    ``SortedQuantifier``.
+
+    Raises:
+        ValueError: the universe the quantifier needs was not given, or is empty.
+    """
+    glyph = {"forall": "∀", "exists": "∃"}.get(node.type, node.type)
+    if isinstance(node, SortedQuantifier):
+        if sort_universes is None or node.sort not in sort_universes:
+            raise ValueError(
+                f"{caller}: the quantifier {glyph}{node.variable.name}:{node.sort} "
+                f"ranges over the sort {node.sort!r}, and no sort_universes[{node.sort!r}] "
+                "(a set of constant names) was given.")
+        universe = sort_universes[node.sort]
+        described = f"sort_universes[{node.sort!r}]"
+    else:
+        if domain is None:
+            raise ValueError(
+                f"{caller}: the quantifier {glyph}{node.variable.name} ranges over "
+                "the domain, and no domain (a set of constant names) was given.")
+        universe = domain
+        described = "domain"
+    names = tuple(sorted(universe))
+    if not names:
+        raise ValueError(
+            f"{caller}: {described} is empty, and a quantifier over no individual has "
+            "no degree here. Give at least one constant name.")
+    return names
 
 
 def satisfies_fuzzy_modal(formula: Node, model: FuzzyKripkeModel, world: World) -> float:
     """Compute the truth DEGREE in ``[0, 1]`` of ``formula`` at ``world`` in ``model``.
 
     Args:
-        formula: a propositional/ground modal formula built from the Node API
-            directly (no parser is involved — see the module docstring),
-            using Łukasiewicz connective nodes (never classical And/Or/Not/
-            Implies/Iff/Xor) under Box/Diamond/Knows/Believes/Says/Wants.
+        formula: a modal formula over the Łukasiewicz connective nodes (never
+            classical And/Or/Not/Implies/Iff/Xor), from
+            ``MSFLParser(fuzzy=True, modal=True)`` or built from the Node API:
+            Box/Diamond/Knows/Believes/Says/Wants, individual quantifiers,
+            predicate quantifiers, and atoms (a third-order atom is a letter of
+            its own, see the module docstring).
         model: the :class:`FuzzyKripkeModel` to evaluate against.
         world: the world to evaluate at (any hashable value; need not be a
             member of ``model.worlds``, exactly like
@@ -345,15 +476,28 @@ def satisfies_fuzzy_modal(formula: Node, model: FuzzyKripkeModel, world: World) 
         The truth degree as a float clamped to ``[0, 1]``.
 
     Raises:
-        NotImplementedError: on a Quantifier/SortedQuantifier, a lambda node,
-            temporal/hybrid/PAL/group-epistemic/deontic node (all future
-            work — see the module docstring), or an otherwise unsupported
-            node type.
+        NotImplementedError: on a lambda node in formula position, a
+            temporal/hybrid/PAL/group-epistemic/deontic node (see the module
+            docstring), a predicate quantifier under a t-norm that is not
+            Łukasiewicz or Gödel, a predicate quantifier whose bound predicate
+            stands in argument position, or an otherwise unsupported node type.
         TypeError: on a classical crisp connective (build the formula with
             fuzzy connective nodes instead).
         ValueError: the valuation of a world holds both spellings of an atom (its key and
-            its text as a formula) with different degrees.
+            its text as a formula) with different degrees; a quantifier is reached and
+            the model has no ``domain`` (no ``sort_universes`` entry for its sort), or
+            an empty one; a sorted constant ``c:S`` names an element that
+            ``model.sort_universes[S]`` does not hold.
+        RuntimeError: a predicate quantifier whose degree Z3 did not determine
+            within its time limit.
     """
+    from .fuzzy import check_sorted_constants
+    check_sorted_constants(formula, model.sort_universes, "satisfies_fuzzy_modal")
+    return _degree(formula, model, world)
+
+
+def _degree(formula: Node, model: FuzzyKripkeModel, world: World) -> float:
+    """The body of :func:`satisfies_fuzzy_modal`."""
     t = model.tnorm
 
     # --- atomic ---
@@ -369,12 +513,12 @@ def satisfies_fuzzy_modal(formula: Node, model: FuzzyKripkeModel, world: World) 
 
     # --- Łukasiewicz connectives: verbatim dispatch into model.tnorm ---
     if isinstance(formula, LukNegation):
-        return _clamp(t.neg(satisfies_fuzzy_modal(formula.formula, model, world)))
+        return _clamp(t.neg(_degree(formula.formula, model, world)))
     if isinstance(formula, (WeakConjunction, WeakDisjunction,
                             StrongConjunction, StrongDisjunction,
                             LukImplication, LukEquivalence)):
-        x = satisfies_fuzzy_modal(formula.left, model, world)
-        y = satisfies_fuzzy_modal(formula.right, model, world)
+        x = _degree(formula.left, model, world)
+        y = _degree(formula.right, model, world)
         if isinstance(formula, WeakConjunction):
             return _clamp(min(x, y))
         if isinstance(formula, WeakDisjunction):
@@ -395,48 +539,27 @@ def satisfies_fuzzy_modal(formula: Node, model: FuzzyKripkeModel, world: World) 
 
     # --- epistemic / doxastic / assertive / bouletic (all four residuated-universal,
     # matching kripke.py's satisfies_modal where all four are all(...)-quantified) ---
-    if isinstance(formula, Knows):
-        rel = _KNOWS_PREFIX + _agent_key(formula.agent)
-        return _clamp(_residuated_box(rel, formula.formula, model, world))
-    if isinstance(formula, Believes):
-        rel = _BELIEVES_PREFIX + _agent_key(formula.agent)
-        return _clamp(_residuated_box(rel, formula.formula, model, world))
-    if isinstance(formula, Says):
-        rel = _SAYS_PREFIX + _agent_key(formula.agent)
-        return _clamp(_residuated_box(rel, formula.formula, model, world))
-    if isinstance(formula, Wants):
-        rel = _WANTS_PREFIX + _agent_key(formula.agent)
+    if isinstance(formula, (Knows, Believes, Says, Wants)):
+        rel = relation_name(formula)
+        assert rel is not None
         return _clamp(_residuated_box(rel, formula.formula, model, world))
 
-    # --- rejected: classical crisp connectives ---
-    if isinstance(formula, _CLASSICAL_CONNECTIVES):
-        raise TypeError(
-            f"Classical connective {type(formula).__name__} is not valid in graded "
-            "modal input; build the formula with Łukasiewicz connective nodes "
-            "(LukNegation/WeakConjunction/WeakDisjunction/StrongConjunction/"
-            "StrongDisjunction/LukImplication/LukEquivalence) instead — the same "
-            "discipline unicode_logic_kit.semantics.fuzzy already enforces for "
-            "non-modal formulas."
-        )
-
-    # --- rejected: quantifiers / lambda (shared with kripke.py's v1 discipline) ---
+    # --- individual quantifiers: infimum / supremum over the names of the domain ---
     if isinstance(formula, (Quantifier, SortedQuantifier)):
-        reject_quantifier(formula, "satisfies_fuzzy_modal")
-    if isinstance(formula, LAMBDA_TYPES):
-        reject_lambda(formula, "satisfies_fuzzy_modal")
+        names = quantifier_universe(formula, model.domain, model.sort_universes,
+                                    "satisfies_fuzzy_modal")
+        degrees_over = [
+            _degree(substitute(formula.formula, formula.variable, Constant(name)), model, world)
+            for name in names]
+        if formula.type in ("∀", "forall"):
+            return min(degrees_over)
+        if formula.type in ("∃", "exists"):
+            return max(degrees_over)
+        raise ValueError(f"satisfies_fuzzy_modal: unknown quantifier type {formula.type!r}")
 
-    # --- rejected: out-of-scope modal node families (see module docstring) ---
-    if isinstance(formula, _TEMPORAL_TYPES):
-        _reject_out_of_scope(formula, "satisfies_fuzzy_modal", "temporal")
-    if isinstance(formula, _HYBRID_TYPES):
-        _reject_out_of_scope(formula, "satisfies_fuzzy_modal", "hybrid")
-    if isinstance(formula, _PAL_TYPES):
-        _reject_out_of_scope(formula, "satisfies_fuzzy_modal", "public announcement logic")
-    if isinstance(formula, _GROUP_EPISTEMIC_TYPES):
-        _reject_out_of_scope(formula, "satisfies_fuzzy_modal", "group-epistemic")
-    if isinstance(formula, _DEONTIC_TYPES):
-        _reject_out_of_scope(formula, "satisfies_fuzzy_modal", "deontic")
+    # --- predicate quantifiers: infimum / supremum over every fuzzy interpretation ---
+    if isinstance(formula, SecondOrderQuantifier):
+        from ..atp.z3_fuzzy_kripke import predicate_quantifier_degree
+        return _clamp(float(predicate_quantifier_degree(formula, model, world)))
 
-    raise NotImplementedError(
-        f"satisfies_fuzzy_modal: unsupported node type {type(formula).__name__}."
-    )
+    refuse_node(formula, "satisfies_fuzzy_modal")

@@ -238,6 +238,12 @@ _MIXING_INFO = {
         "Parenthesise nested products (•) explicitly",
     ),
 }
+# Every fuzzy mode has the four connectives of "fl" at this level, whatever its
+# order, its modal family and its sorts.
+for _order in ("modal", "so", "somodal", "to", "tomodal"):
+    for _sorts in ("", "_sorted"):
+        _MIXING_INFO["fl" + _order + _sorts] = _MIXING_INFO["fl"]
+del _order, _sorts
 
 
 def _build_pattern_index(parser: Lark) -> dict:

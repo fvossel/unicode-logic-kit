@@ -76,6 +76,7 @@ from ..fol.nodes import (
     Lambda, LambdaVar, Application,
     Box, Diamond, Always, Eventually, Next, Until,
     Historically, Once, Previous, Since, Knows, Believes,
+    substitute,
 )
 from ..fol._truth_constants import truth_value as _truth_value
 
@@ -153,6 +154,10 @@ def _ground(node: Node, var_name: str, const_name: str) -> Node:
     Returns a new node; the input is never mutated.
     """
     if isinstance(node, Atom):
+        if any(isinstance(a, Lambda) for a in node.args):
+            # A lambda term in argument position (a third-order atom) has a body of
+            # its own in which the variable may stand.
+            return substitute(node, Variable(var_name), Constant(const_name))
         return Atom(node.predicate,
                     [_ground_term(a, var_name, const_name) for a in node.args])
     if isinstance(node, Not):

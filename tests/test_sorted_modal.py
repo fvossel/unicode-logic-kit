@@ -574,17 +574,12 @@ class TestHolExportsSorted:
 # =============================================================================
 
 class TestRefusals:
-    def test_modal_fuzzy_still_refused(self):
-        with pytest.raises(ValueError, match="fuzzy"):
-            MSFLParser(modal=True, fuzzy=True)
-
-    def test_modal_sorted_fuzzy_still_refused(self):
-        with pytest.raises(ValueError, match="fuzzy"):
-            MSFLParser(modal=True, many_sorted=True, fuzzy=True)
-
-    def test_second_order_fuzzy_still_refused(self):
-        with pytest.raises(ValueError, match="fuzzy"):
-            MSFLParser(second_order=True, fuzzy=True)
+    def test_fuzzy_combines_with_modal_and_with_second_order(self):
+        """With ``fuzzy=True`` the same choices give the fuzzy modes
+        (tests/test_fuzzy_mode_combinations.py covers them)."""
+        assert MSFLParser(modal=True, fuzzy=True)._mode == "flmodal"
+        assert MSFLParser(modal=True, many_sorted=True, fuzzy=True)._mode == "flmodal_sorted"
+        assert MSFLParser(second_order=True, fuzzy=True)._mode == "flso"
 
     def test_second_order_combines_with_modal(self):
         """second_order and modal together, with and without many_sorted, are
@@ -599,8 +594,9 @@ class TestRefusals:
         assert MSFLParser(third_order=True, modal=True,
                           many_sorted=True)._mode == "tomodal_sorted"
 
-    def test_every_order_refuses_fuzzy_next_to_modal_or_a_higher_order(self):
-        for kwargs in ({"second_order": True, "modal": True, "fuzzy": True},
-                       {"third_order": True, "many_sorted": True, "fuzzy": True}):
-            with pytest.raises(ValueError, match="fuzzy"):
-                MSFLParser(**kwargs)
+    def test_third_order_does_not_take_second_order_and_a_standalone_logic_takes_no_flag(self):
+        with pytest.raises(ValueError, match="already CONTAINS"):
+            MSFLParser(third_order=True, second_order=True, many_sorted=True)
+        for standalone in ("dependence", "linear", "lambek"):
+            with pytest.raises(ValueError, match="cannot be combined with any other mode"):
+                MSFLParser(modal=True, many_sorted=True, **{standalone: True})

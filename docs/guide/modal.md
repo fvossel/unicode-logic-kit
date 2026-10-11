@@ -4,7 +4,7 @@
 
 ## Parsing modal mode
 
-`modal=True` is FOL plus the modal operators, over unsorted quantifiers/constants — or, combined with `many_sorted=True`, over SORTED ones (every binder then needs a sort annotation, exactly like plain MSFOL). It combines with `second_order=True` (second-order modal logic, {doc}`second-order`) and with `third_order=True` ({doc}`third-order`), each with or without sorts; it does not combine with `fuzzy`. See [Many-sorted modal logic](#many-sorted-modal-logic) below for the sorted combination.
+`modal=True` is FOL plus the modal operators, over unsorted quantifiers/constants — or, combined with `many_sorted=True`, over SORTED ones (every binder then needs a sort annotation, exactly like plain MSFOL). It combines with `second_order=True` (second-order modal logic, {doc}`second-order`) and with `third_order=True` ({doc}`third-order`), each with or without sorts. With `fuzzy=True` the same operators stand over the Łukasiewicz connectives; such a formula has a degree at a world of a fuzzy Kripke model and is evaluated and searched by the routes of {doc}`fuzzy`, not by the two-valued ones of this page. See [Many-sorted modal logic](#many-sorted-modal-logic) below for the sorted combination.
 
 ```python
 from unicode_logic_kit import MSFLParser

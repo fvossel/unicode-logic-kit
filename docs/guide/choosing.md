@@ -304,6 +304,9 @@ is_valid_resolution(Implies(psi, parse("P(a) → Q(a)")))   # → True
 | Many-sorted FOL (MSFOL) | `many_sorted=True` | sorted `∀x:S`, `c:S` | `satisfies()` | resolution / Z3 (via `to_fol()`), Fitch; `find_model` enumerates sort universes |
 | Fuzzy (FL) | `fuzzy=True` | weak ∧ ∨, strong ⊗ ⊕, Łuk ¬ → ↔ | `fuzzy_evaluate()` | `fuzzy_is_valid` / `fuzzy_is_satisfiable` (Z3 reals); Łukasiewicz / Gödel / product t-norms |
 | Many-sorted fuzzy (MSFL) | `many_sorted=True, fuzzy=True` | sorts + Łukasiewicz | `fuzzy_evaluate()` | `fuzzy_*` (Z3 reals); `to_msfol()` lowers to classical |
+| Fuzzy modal | `fuzzy=True, modal=True` | □ ◇, K_a B_a Say_a Want_a over the Łukasiewicz connectives | `satisfies_fuzzy_modal()` (weighted edges, constant domain) | `fuzzy_modal_search` (a countermodel with at most n worlds; Łukasiewicz / Gödel; no proof of validity) |
+| Fuzzy second-order | `fuzzy=True, second_order=True` | `∀P` / `∃P` as infimum / supremum over fuzzy interpretations | `fuzzy_evaluate()`; with `modal=True` `satisfies_fuzzy_modal()` | `fuzzy_is_valid` / `fuzzy_is_satisfiable` over a finite domain (Łukasiewicz / Gödel) |
+| Fuzzy third-order | `fuzzy=True, third_order=True` | a predicate or λ-term as an argument, `Pos(G)` | `fuzzy_evaluate()`: the atom a letter, or computed by `functionals=` | `fuzzy_*` with the atom as a letter; a quantifier over a predicate in argument position is refused |
 | Modal / temporal / epistemic / deontic | `modal=True` | □ ◇, K_a B_a, Ⓖ Ⓕ Ⓝ Ⓤ, Ⓞ Ⓟ (+ past-tense ⒣ ⒫ ⒴ ⒮) | `satisfies_modal()` | native modal tableau (`is_modal_valid` / `modal_decide`); `standard_translation()` → Z3/resolution; `qml_is_valid`; Fitch (K/T/S4/S5, prop.) |
 | Many-sorted modal | `modal=True, many_sorted=True` | the modal family above, over sorted `∀x:S`/`c:S` | `satisfies_modal()` (sorts world-relative, not rigid — see {doc}`modal`) | `qml_is_valid`, `to_isabelle_modal`, `to_thf_modal_full` (all three assume per-world non-emptiness of every sort and the membership of every sorted constant in its sort at every world, so they agree with `api.prove` on a modal-free sorted schema) |
 | Many-valued K3 / LP / FDE | `MSFLParser()` + `logic=` / `semantics.matrix` | classical syntax over {0, ½, 1} / four-valued | `kleene_value()`; `TruthMatrix` | `truth_table`, three-valued `is_valid`; `K3_MATRIX` / `LP_MATRIX` / `FDE_MATRIX`; Fitch under `logic="K3"`/`"LP"` |
@@ -409,16 +412,16 @@ isinstance(thf, str) and "thf" in thf   # → True   (a TPTP THF problem ready f
 
 ## Composing parser modes
 
-A classical mode is three independent choices: the **order** (first, `second_order=True`, `third_order=True`), the **modal** family (`modal=True`), and **sorts** on the individual binders and constants (`many_sorted=True`). Every one of the twelve combinations is a mode, including all three at once (`third_order=True, modal=True, many_sorted=True`). A sort restricts an individual binder in every one of them; a predicate quantifier and a property argument range over the relations on the whole domain. The third-order mode CONTAINS second-order syntax, and so refuses to be asked for alongside it. The **fuzzy** connectives combine with sorts and with nothing else. The **dependence**, **linear**, and **lambek** modes are standalone logics (their connectives and semantics replace the classical ones), so they combine with nothing. The constructor rejects an unsupported combination with a clear `ValueError`. (The matrix, ALC, intuitionistic, relevant, and peripheral logics are separate subsystems, not parser flags.)
+A classical mode is three independent choices: the **order** (first, `second_order=True`, `third_order=True`), the **modal** family (`modal=True`), and **sorts** on the individual binders and constants (`many_sorted=True`). Every one of the twelve combinations is a mode, including all three at once (`third_order=True, modal=True, many_sorted=True`). A sort restricts an individual binder in every one of them; a predicate quantifier and a property argument range over the relations on the whole domain. The third-order mode CONTAINS second-order syntax, and so refuses to be asked for alongside it. The **fuzzy** connectives (`fuzzy=True`) combine with all three choices too, which gives twelve fuzzy modes next to the twelve classical ones; a fuzzy mode has none of the counting forms (`∃≥n`, `but`, `μ(…)`, `|{x : φ}|`), whose reading is two-valued. The **dependence**, **linear**, and **lambek** modes are standalone logics (their connectives and semantics replace the classical ones), so they combine with nothing. The constructor rejects an unsupported combination with a clear `ValueError`. (The matrix, ALC, intuitionistic, relevant, and peripheral logics are separate subsystems, not parser flags.)
 
 | Combine… | with sorts | with fuzzy | with modal | with second-order | with third-order |
 |---|---|---|---|---|---|
 | **base FOL** | ✅ MSFOL | ✅ FL | ✅ modal | ✅ second-order | ✅ third-order |
 | **sorts** | — | ✅ MSFL | ✅ sorted modal | ✅ sorted second-order | ✅ sorted third-order |
-| **fuzzy** | ✅ MSFL | — | ❌ | ❌ | ❌ |
-| **modal** | ✅ sorted modal | ❌ | — | ✅ second-order modal | ✅ third-order modal |
-| **second-order** | ✅ sorted second-order | ❌ | ✅ second-order modal | — | ❌ (contained in it) |
-| **third-order** | ✅ sorted third-order | ❌ | ✅ third-order modal | ❌ (contains it) | — |
+| **fuzzy** | ✅ MSFL | — | ✅ fuzzy modal | ✅ fuzzy second-order | ✅ fuzzy third-order |
+| **modal** | ✅ sorted modal | ✅ fuzzy modal | — | ✅ second-order modal | ✅ third-order modal |
+| **second-order** | ✅ sorted second-order | ✅ fuzzy second-order | ✅ second-order modal | — | ❌ (contained in it) |
+| **third-order** | ✅ sorted third-order | ✅ fuzzy third-order | ✅ third-order modal | ❌ (contains it) | — |
 
 What each combination has beyond the parser differs, and the table of logics above says it per row: a second-order modal formula is evaluated in a Kripke model and searched for a countermodel, a third-order one over sorted individuals is evaluated in a finite structure, and a third-order modal one is exported to a higher-order prover and not evaluated here.
 

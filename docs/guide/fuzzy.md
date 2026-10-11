@@ -47,6 +47,20 @@ ms.parse("∀x:Person Tall(x)").to_unicode_str()    # → '∀x:Person Tall(x)'
 ms.parse("Tall(alice:Person)").to_unicode_str()   # → 'Tall(alice:Person)'
 ```
 
+`fuzzy=True` also combines with `modal=True`, `second_order=True` and `third_order=True`, each with or without `many_sorted=True`: the modal operators, the predicate quantifiers `∀P` / `∃P` and a predicate in argument position stand over the same seven connectives. A fuzzy mode has none of the forms whose reading is two-valued (the counting quantifier `∃≥n`, `but`, the measure term and the cardinality term). {doc}`parsing` has the table of the modes; the sections [Graded (fuzzy) Kripke semantics](#graded-fuzzy-kripke-semantics), [Predicate quantifiers](#predicate-quantifiers) and [Third-order atoms](#third-order-atoms) below say what evaluates and decides their formulas.
+
+```python
+fm = MSFLParser(fuzzy=True, modal=True)
+fm.parse("□(P ⊗ Q) → □P").to_unicode_str()        # → '□(P ⊗ Q) → □P'
+type(fm.parse("¬□P")).__name__                    # → 'LukNegation'
+
+so = MSFLParser(fuzzy=True, second_order=True)
+so.parse("∀P (P ⊕ ¬P)").to_unicode_str()          # → '∀P (P ⊕ ¬P)'
+
+MSFLParser(fuzzy=True, third_order=True, modal=True, many_sorted=True)._mode
+# → 'fltomodal_sorted'
+```
+
 Parsing a classical boolean formula in fuzzy mode (or feeding a classically parsed formula to the evaluator) is the one common mistake — the connective node carries no Łukasiewicz reading and the evaluator rejects it:
 
 ```python
@@ -468,10 +482,10 @@ of Logic and Computation* 21(5), 2011, 739-790):
   convention both evaluators share: `"alethic"`, `"K:"+agent`, `"B:"+agent`,
   `"Say:"+agent`, `"Want:"+agent`).
 
-A formula for the graded evaluator is built with **Łukasiewicz** connective
+A formula for the graded evaluator has **Łukasiewicz** connective
 nodes under the modal operators (never classical `And`/`Or`/`Not`/…, exactly
-this page's own discipline above) — there is no parser mode combining
-`modal=True` with `fuzzy=True`, so the AST is always built directly:
+this page's own discipline above). `MSFLParser(fuzzy=True, modal=True)` reads
+it (`fm.parse("□(P ⊗ Q) → □P")`), and the nodes can be built directly:
 
 ```python
 from unicode_logic_kit.semantics import FuzzyKripkeModel, satisfies_fuzzy_modal
@@ -520,21 +534,263 @@ mg = FuzzyKripkeModel(
 satisfies_fuzzy_modal(Diamond(P), mg, "w0")  # → 0.5   min(0.5, 0.5)
 ```
 
-**v1 scope.** Exactly graded `Box`/`Diamond`/`Knows`/`Believes`/`Says`/
-`Wants`, single-step aggregation, no fixpoints — the same "propositional /
-ground, v1" discipline `semantics.kripke` documents for the crisp evaluator.
+**Scope.** The modal operators read are graded `Box`/`Diamond`/`Knows`/
+`Believes`/`Says`/`Wants`, each by one step of aggregation, with no fixpoints.
 Temporal closure, hybrid logic, public announcement logic, group-epistemic
 operators (`EverybodyKnows`/`DistributedKnowledge`/`CommonKnowledge`), and
 Standard-Deontic-style serial-frame reasoning are refused BY NAME rather
 than silently approximated — a graded fixpoint or model update over a
-continuous t-norm is an open research question in its own right:
+continuous t-norm is an open research question in its own right. The parser
+reads the whole modal family, so such a formula parses and is refused here:
 
 ```python
 from unicode_logic_kit import Next
 
 satisfies_fuzzy_modal(Next(P), m, "w0")
 # raises NotImplementedError: satisfies_fuzzy_modal: Next (temporal) is not
-# supported by the graded (fuzzy) Kripke evaluator — …
+# supported by the graded (fuzzy) Kripke semantics, which reads
+# Box/Diamond/Knows/Believes/Says/Wants with single-step aggregation and no fixpoints; …
+```
+
+### Quantifiers over a constant domain
+
+An individual quantifier ranges over the constant names of the model's
+`domain` (a sorted one over `sort_universes[sort]`), exactly as
+`fuzzy_evaluate` reads it: `∀` is the infimum and `∃` the supremum of the
+instances. The domain is ONE set for every world, the setting of Hájek's fuzzy
+modal predicate logics, so the Barcan formula and its converse have degree 1.
+
+```python
+fm = MSFLParser(fuzzy=True, modal=True)
+m = FuzzyKripkeModel(
+    worlds={"w0", "w1"},
+    relations={"alethic": {("w0", "w1"): 0.5}},
+    valuation={"w1": {"Tall(alice)": 0.25, "Tall(bob)": 0.75}},
+    domain={"alice", "bob"},
+)
+satisfies_fuzzy_modal(fm.parse("□∀x Tall(x)"), m, "w0")   # → 0.75  0.5 → min(0.25, 0.75)
+satisfies_fuzzy_modal(fm.parse("∃x ◇Tall(x)"), m, "w0")   # → 0.25  0.5 ⊗ 0.75
+satisfies_fuzzy_modal(fm.parse("∀x □Tall(x) → □∀x Tall(x)"), m, "w0")   # → 1.0
+```
+
+A model without a domain has nothing for a quantifier to range over:
+
+```python
+satisfies_fuzzy_modal(fm.parse("∀x Tall(x)"), FuzzyKripkeModel({"w0"}), "w0")
+# raises ValueError: satisfies_fuzzy_modal: the quantifier ∀x ranges over the domain,
+# and no domain (a set of constant names) was given.
+```
+
+### Searching for a countermodel
+
+`fuzzy_modal_search` looks for a model in which a formula has a degree below 1
+at world 0. For each size `n = 1 .. max_worlds` every edge weight and atom
+degree of a model with `n` worlds is an unknown real in `[0, 1]`, and Z3
+decides whether some choice gives a degree below 1 (Łukasiewicz and Gödel,
+whose connectives are piecewise linear; the product t-norm is refused). A model
+that is found has its degree computed again by `satisfies_fuzzy_modal`.
+
+The axiom K separates the frames. Over a fuzzy accessibility relation it fails
+under Łukasiewicz: one world that sees itself with weight 1/2, `P = 1/2`,
+`Q = 0` gives `□(P → Q) = 1`, `□P = 1`, `□Q = 1/2`. Over a crisp relation it
+holds, and under Gödel it holds over every relation:
+
+```python
+from unicode_logic_kit import fuzzy_modal_search
+
+k = fm.parse("□(P → Q) → (□P → □Q)")
+found = fuzzy_modal_search(k)
+found.worlds                                  # → 1
+found.degree < 1                              # → True
+satisfies_fuzzy_modal(k, found.model, 0) == found.degree      # → True
+
+fuzzy_modal_search(k, crisp_frame=True).exhausted            # → True
+fuzzy_modal_search(k, tnorm="godel").exhausted               # → True
+fuzzy_modal_search(k, tnorm="godel").detail
+# → 'no countermodel with at most 3 world(s); not a proof of validity, larger models are not searched'
+```
+
+`frame=` names the frame of `□` / `◇`, and `systems=` that of the agents
+(`{"epistemic": "S5"}`, `{"doxastic": "KD45"}`). The conditions are read in
+their graded form, with `⊗` the t-norm: reflexive `R(w, w) = 1`, symmetric
+`R(w, v) = R(v, w)`, transitive `R(w, v) ⊗ R(v, u) ≤ R(w, u)`, serial "some `v`
+with `R(w, v) = 1`", euclidean `R(w, v) ⊗ R(w, u) ≤ R(v, u)`. Under them the
+axioms T, B, 4, D and 5 have degree 1; a frame with another condition (`"GL"`)
+is refused by name.
+
+```python
+t = fm.parse("□P → P")
+fuzzy_modal_search(t).model is not None                   # → True   a world that does not see itself
+fuzzy_modal_search(t, frame="T").exhausted                # → True
+fuzzy_modal_search(fm.parse("K_alice P → P"), systems={"epistemic": "S5"}).exhausted   # → True
+```
+
+The result says which of four things happened: `model` (a countermodel, with
+its `degree`), `exhausted` (every size up to the bound was decided, none has a
+countermodel), `timed_out` (Z3 did not decide a size in `timeout` milliseconds)
+and `unsupported` (the formula is outside the fragment, with the message of the
+refusal). `result.to_dict()` is JSON, and `fuzzy_kripke_model_to_dict` /
+`fuzzy_kripke_model_from_dict` carry a model across it.
+
+```python
+fuzzy_modal_search(fm.parse("ⒼP")).unsupported
+# → 'NotImplementedError: fuzzy_modal_search: Always (temporal) is not supported by the graded (fuzzy) Kripke semantics, …'
+```
+
+### No countermodel up to a bound is not validity
+
+`exhausted=True` means that no model with at most `max_worlds` worlds refutes
+the formula, and nothing more. Under the Gödel t-norm it cannot become a proof
+by raising the bound. `□¬¬P → ¬¬□P` has degree 1 in every FINITE model: if
+`¬¬□P = 0` then `□P = 0`, so some world is seen with a weight above `P = 0`
+there, and then `□¬¬P = 0` too. Over infinitely many worlds `w_1, w_2, …`, each
+seen with weight 1 and with `P = 1/n` at `w_n`, it has degree 0: every `¬¬P` is
+1, so `□¬¬P = 1`, while `□P` is the infimum 0. The logic of `□` over
+`[0, 1]`-valued Gödel Kripke models has no finite model property (X. Caicedo
+and R. O. Rodríguez, "Standard Gödel modal logics", *Studia Logica* 94(2), 2010,
+189-214).
+
+```python
+fuzzy_modal_search(fm.parse("□¬¬P → ¬¬□P"), tnorm="godel", max_worlds=4).exhausted   # → True
+```
+
+## Predicate quantifiers
+
+`MSFLParser(fuzzy=True, second_order=True)` reads `∀P` / `∃P` over the
+Łukasiewicz connectives. A predicate quantifier ranges over the **fuzzy**
+interpretations of its predicate: `∀P φ` is the infimum of `φ` over every
+assignment of a degree in `[0, 1]` to each ground atom of `P` that `φ` reads,
+and `∃P φ` the supremum. That is an optimum over a real cube, not an
+enumeration; it is computed exactly as linear real arithmetic (Z3), also where
+it is approached and not reached.
+
+```python
+so = MSFLParser(fuzzy=True, second_order=True)
+
+fuzzy_evaluate(so.parse("∀P (P ∨ ¬P)"), {})                  # → 0.5   inf of max(p, 1 − p)
+fuzzy_evaluate(so.parse("∀P (P ⊕ ¬P)"), {})                  # → 1.0   min(1, p + 1 − p)
+# Gödel: ¬p is 1 at p = 0 and 0 above, so max(p, ¬p) comes as close to 0 as one likes
+fuzzy_evaluate(so.parse("∀P (P ∨ ¬P)"), {}, tnorm="godel")   # → 0.0
+
+tall = {"Tall(alice)": 0.25, "Tall(bob)": 0.75}
+people = {"alice", "bob"}
+fuzzy_evaluate(so.parse("∀P ∀x (P(x) → Tall(x))"), tall, domain=people)   # → 0.25  P = 1 everywhere
+```
+
+The interpretations are fuzzy and not crisp, and the choice shows in
+comprehension: `∃P ∀x (P(x) ↔ Tall(x))` has degree 1 because `P` may take the
+degrees of `Tall`. Over crisp sets `P` it would be 1/2 for a `Tall` of degree
+1/2.
+
+```python
+fuzzy_evaluate(so.parse("∃P ∀x (P(x) ↔ Tall(x))"), tall, domain=people)   # → 1.0
+```
+
+The deciders read the quantifier the same way. `∀P P` is the bottom degree and
+`∃P P` the top one, so ex falso is a second-order validity:
+
+```python
+fuzzy_is_valid(so.parse("∀P (P ⊕ ¬P)"))                          # → True
+fuzzy_is_valid(so.parse("∀P (P ∨ ¬P)"))                          # → False
+fuzzy_is_valid(so.parse("∃P ∀x (P(x) ↔ Q(x))"), domain=people)   # → True
+fuzzy_is_valid(so.parse("(∀P P) → Q"))                           # → True
+
+# the supremum 1/2 of P ∧ ¬P is reached and not exceeded
+fuzzy_is_satisfiable(so.parse("∃P (P ∧ ¬P)"), threshold=0.5)                # → True
+fuzzy_is_satisfiable(so.parse("∃P (P ∧ ¬P)"), threshold=0.5, strict=True)   # → False
+```
+
+The product t-norm is not linear and is refused by name for a predicate
+quantifier (`fuzzy_evaluate` keeps it for every other formula):
+
+```python
+fuzzy_evaluate(so.parse("∀P (P ∨ ¬P)"), {}, tnorm="product")
+# raises NotImplementedError: evaluate: a predicate quantifier is an infimum or supremum
+# over every fuzzy interpretation of its predicate, computed as linear real arithmetic;
+# the product t-norm is not linear. Use tnorm='lukasiewicz' or tnorm='godel'.
+```
+
+### Two terms and one individual
+
+An individual is named by a term here: a quantifier ranges over the constant
+names of a domain, and two names are two individuals. A predicate quantifier can
+say that two terms differ, `∃P (P(alice) ⊗ ¬P(bob))`. One valuation is one
+model, and in it the two names are two individuals, so the evaluator gives the
+formula degree 1. A decider answers for ALL models, including those in which
+both names denote one individual, so it refuses the formula unless the names are
+declared as individuals of the domain:
+
+```python
+leibniz = so.parse("∃P (P(alice) ⊗ ¬P(bob))")
+fuzzy_evaluate(leibniz, {})                  # → 1.0
+fuzzy_is_valid(leibniz, domain=people)       # → True
+```
+
+```python
+fuzzy_is_valid(leibniz)
+# raises NotImplementedError: z3_fuzzy: predicate quantifiers of the formula apply their
+# bound predicates to the different terms alice and bob, and alice is not a name of the
+# declared domain. Two terms may name one individual, …
+```
+
+### Predicate quantifiers at worlds
+
+With `modal=True` a bound predicate is an intension, as in the two-valued
+Kripke evaluator: it has a degree of its own at each world. The frame
+conditions of correspondence theory then have a DEGREE. `∀P (□P → P)` at a world
+has exactly the weight with which the world sees itself:
+
+```python
+som = MSFLParser(fuzzy=True, second_order=True, modal=True)
+loop = FuzzyKripkeModel({"w"}, {"alethic": {("w", "w"): 0.25}})
+satisfies_fuzzy_modal(som.parse("∀P (□P → P)"), loop, "w")        # → 0.25
+
+fuzzy_modal_search(som.parse("∀P (□P → P)")).model is not None    # → True
+fuzzy_modal_search(som.parse("∀P (□P → P)"), frame="T").exhausted # → True
+```
+
+## Third-order atoms
+
+`MSFLParser(fuzzy=True, third_order=True)` reads a predicate or a lambda term in
+argument position, `Pos(G)`, `Pos(λx. ¬G(x))`. Such an atom is read in one of two
+ways.
+
+Without more it is a **letter** of its own, looked up by its written form: the
+property is taken by name. The evaluator, the graded Kripke evaluator and the
+deciders all read it so. A formula the deciders report valid is therefore valid
+whatever `Pos` is; a model they report may give `Pos(G)` and `Pos(H)` different
+degrees although `G` and `H` agree everywhere, since nothing ties the two
+letters.
+
+```python
+to = MSFLParser(fuzzy=True, third_order=True)
+fuzzy_evaluate(to.parse("Pos(G)"), {"Pos(G)": 0.5})                       # → 0.5
+fuzzy_is_valid(to.parse("(Pos(G) ⊗ (Pos(G) → Pos(H))) → Pos(H)"))         # → True
+```
+
+With an entry in `functionals` the evaluator **computes** it: the function
+receives each property argument as a function from constant names to degrees
+(`G` as the degrees of the atoms `G(…)`, `λx. φ` as the degree of `φ` at each
+name), and each individual argument as the name of its term.
+
+```python
+g = {"G(alice)": 0.25, "G(bob)": 0.75}
+every = {"Pos": lambda prop: min(prop(d) for d in people)}
+
+fuzzy_evaluate(to.parse("Pos(G)"), g, functionals=every)                  # → 0.25
+fuzzy_evaluate(to.parse("Pos(λx. ¬G(x))"), g, functionals=every)          # → 0.25  complement: 0.75, 0.25
+fuzzy_evaluate(to.parse("Pos(λx. G(x) ⊕ ¬G(x))"), g, functionals=every)   # → 1.0
+```
+
+A predicate quantifier that binds a predicate standing in argument position is
+refused by name: the quantifier ranges over the degrees of the ground atoms of
+its predicate, and an atom that takes the predicate itself as an argument is
+none of them.
+
+```python
+fuzzy_evaluate(to.parse("∀G (Pos(G) → ∃x G(x))"), {}, domain=people)
+# raises NotImplementedError: evaluate: the predicate G is bound by a predicate quantifier
+# and stands in argument position in 'Pos(G)' (third order). …
 ```
 
 ## End-to-end: a small fuzzy rule base

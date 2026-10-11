@@ -406,11 +406,13 @@ def test_rejects_classical_connective_nested_under_box():
         satisfies_fuzzy_modal(Box(And(P, Q)), m, "w0")
 
 
-def test_rejects_quantifiers():
+def test_a_quantifier_needs_the_individuals_of_the_model():
+    """A quantifier ranges over the model's domain (tests/test_fuzzy_kripke_quantifiers.py);
+    a model without one has nothing for it to range over."""
     m = _model()
-    with pytest.raises(NotImplementedError, match="Quantifier"):
+    with pytest.raises(ValueError, match="no domain"):
         satisfies_fuzzy_modal(Quantifier("forall", Variable("x"), P), m, "w0")
-    with pytest.raises(NotImplementedError, match="SortedQuantifier"):
+    with pytest.raises(ValueError, match=r"no sort_universes\['Person'\]"):
         satisfies_fuzzy_modal(
             SortedQuantifier("forall", Variable("x"), "Person", P), m, "w0")
 

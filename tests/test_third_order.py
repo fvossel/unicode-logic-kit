@@ -53,14 +53,19 @@ def test_third_order_does_not_combine_with_second_order():
         MSFLParser(third_order=True, second_order=True)
 
 
-@pytest.mark.parametrize("kwargs", [
-    {"third_order": True, "fuzzy": True},
-    {"third_order": True, "fuzzy": True, "many_sorted": True},
-    {"third_order": True, "fuzzy": True, "modal": True},
+@pytest.mark.parametrize("kwargs, mode", [
+    ({"third_order": True, "fuzzy": True}, "flto"),
+    ({"third_order": True, "fuzzy": True, "many_sorted": True}, "flto_sorted"),
+    ({"third_order": True, "fuzzy": True, "modal": True}, "fltomodal"),
 ])
-def test_third_order_refuses_the_fuzzy_flag(kwargs):
-    with pytest.raises(ValueError, match="fuzzy"):
-        MSFLParser(**kwargs)
+def test_third_order_takes_the_fuzzy_connectives(kwargs, mode):
+    """A predicate in argument position next to the Łukasiewicz connectives
+    (tests/test_fuzzy_mode_combinations.py)."""
+    parser = MSFLParser(**kwargs)
+    assert parser._mode == mode
+    node = parser.parse("Pos(G) ⊗ ¬Pos(H)")
+    assert type(node).__name__ == "StrongConjunction"
+    assert node.left == Atom("Pos", [PredicateTerm("G")])
 
 
 @pytest.mark.parametrize("kwargs, mode", [

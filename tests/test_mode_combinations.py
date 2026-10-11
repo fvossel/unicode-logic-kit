@@ -426,15 +426,20 @@ def test_the_other_sorted_modes_have_no_measure_and_no_cardinality_term(order, m
 # What stays refused
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("kwargs", [
-    {"second_order": True, "modal": True, "fuzzy": True},
-    {"second_order": True, "modal": True, "many_sorted": True, "fuzzy": True},
-    {"third_order": True, "many_sorted": True, "fuzzy": True},
-    {"third_order": True, "modal": True, "many_sorted": True, "fuzzy": True},
-])
-def test_the_classical_combinations_do_not_take_the_fuzzy_connectives(kwargs):
-    with pytest.raises(ValueError, match="fuzzy"):
-        MSFLParser(**kwargs)
+@pytest.mark.parametrize("combination", COMBINATIONS)
+def test_the_fuzzy_flag_selects_another_mode_and_leaves_the_classical_one_as_it_is(combination):
+    """``fuzzy=True`` next to the same three choices is a mode of its own, with the
+    Łukasiewicz connectives (tests/test_fuzzy_mode_combinations.py). A classical mode
+    keeps the two-valued ones and has no ``⊗``."""
+    classical = parser(*combination)
+    fuzzy = MSFLParser(fuzzy=True, **flags(*combination))
+    assert fuzzy._mode != classical._mode
+    assert type(classical.parse("P ∧ Q")).__name__ == "And"
+    assert type(classical.parse("P ⊕ Q")).__name__ == "Xor"
+    assert type(fuzzy.parse("P ∧ Q")).__name__ == "WeakConjunction"
+    assert type(fuzzy.parse("P ⊕ Q")).__name__ == "StrongDisjunction"
+    with pytest.raises(NamingError):
+        classical.parse("P ⊗ Q")
 
 
 def test_third_order_contains_second_order_in_every_combination():

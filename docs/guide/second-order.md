@@ -683,19 +683,23 @@ With `many_sorted=True` the same writers state the sorts as axioms; see "Sorted 
 
 ## Scope
 
-This is second-order **predicate** (relation) quantification with standard semantics over finite models. Quantification over functions and a complete higher-order type system are out of scope; a predicate that takes a property as its argument is third order, see [Third-order logic](third-order.md). The lambda layer already supplies higher-order *terms* (`λP. P(x)`), which you beta-reduce and lambda-eliminate before evaluation. The `second_order=True` mode does not combine with fuzziness — the constructor rejects that combination with a `ValueError`. With `modal=True` it is second-order modal logic, which has a section of its own above. With `many_sorted=True` it accepts the sorted object quantifiers `∀x:S` / `∃x:S`: `satisfies_so` and `holds` range them over the sort listed in the structure's `sorts` (a sort is never empty, so an empty one raises `IllegalStructureError`, and a sort the structure does not list raises `KeyError`). The bounded search functions above read a sorted formula as the model finder does, in one universe: one domain, each sort a non-empty subset of it (sorts may overlap), `c:S` an element of `S`, a sort and the unary predicate of its name one symbol, and `∀P` / `∃P` ranging over every relation on the whole domain. A bound predicate variable with the name of a sort is refused with a `NotImplementedError`, and with `fast=True` a sorted quantifier or constant inside a second-order quantifier is refused with a `ValueError`. `to_thf_so` / `to_isabelle_so` raise `NotImplementedError` on a sorted formula and name the writers that take it: `to_thf_to` / `to_isabelle_to` of {doc}`third-order` read second-order syntax too, and state the sorts as axioms next to the formula. For exporting `∀P` / `∃P` to a higher-order prover, see `unicode_logic_kit.hol` (`to_thf_so` / `to_isabelle_so`), which map them to native HOL predicate quantifiers.
+This is second-order **predicate** (relation) quantification with standard semantics over finite models. Quantification over functions and a complete higher-order type system are out of scope; a predicate that takes a property as its argument is third order, see [Third-order logic](third-order.md). The lambda layer already supplies higher-order *terms* (`λP. P(x)`), which you beta-reduce and lambda-eliminate before evaluation. With `fuzzy=True` it is fuzzy second-order logic: the connectives are the Łukasiewicz ones, and a predicate quantifier is an infimum or supremum over the fuzzy interpretations of its predicate ({doc}`fuzzy`, "Predicate quantifiers"); the evaluators and search functions of this page are two-valued and refuse such a formula. With `modal=True` it is second-order modal logic, which has a section of its own above. With `many_sorted=True` it accepts the sorted object quantifiers `∀x:S` / `∃x:S`: `satisfies_so` and `holds` range them over the sort listed in the structure's `sorts` (a sort is never empty, so an empty one raises `IllegalStructureError`, and a sort the structure does not list raises `KeyError`). The bounded search functions above read a sorted formula as the model finder does, in one universe: one domain, each sort a non-empty subset of it (sorts may overlap), `c:S` an element of `S`, a sort and the unary predicate of its name one symbol, and `∀P` / `∃P` ranging over every relation on the whole domain. A bound predicate variable with the name of a sort is refused with a `NotImplementedError`, and with `fast=True` a sorted quantifier or constant inside a second-order quantifier is refused with a `ValueError`. `to_thf_so` / `to_isabelle_so` raise `NotImplementedError` on a sorted formula and name the writers that take it: `to_thf_to` / `to_isabelle_to` of {doc}`third-order` read second-order syntax too, and state the sorts as axioms next to the formula. For exporting `∀P` / `∃P` to a higher-order prover, see `unicode_logic_kit.hol` (`to_thf_so` / `to_isabelle_so`), which map them to native HOL predicate quantifiers.
 
 ### Combining second-order with other modes
 
 ```python
-# This combination raises ValueError:
+# Third order contains second-order syntax, so asking for both raises ValueError:
 try:
-    MSFLParser(second_order=True, fuzzy=True)  # raises ValueError
+    MSFLParser(second_order=True, third_order=True)  # raises ValueError
 except ValueError as e:
     print("cannot be combined" in str(e))  # → True
 
 # The modal family combines with ∀P / ∃P (see "Second-order modal logic" below):
 MSFLParser(second_order=True, modal=True).parse("∀P (□P → P)").to_unicode_str()   # → '∀P (□P → P)'
+
+# So do the Łukasiewicz connectives (see the fuzzy guide for their evaluation):
+type(MSFLParser(second_order=True, fuzzy=True).parse("∀P (P ∨ ¬P)").formula).__name__
+# → 'WeakDisjunction'
 
 # Sorted object quantifiers combine with ∀P / ∃P; ∀x:S ranges over the sort of the structure:
 ps = MSFLParser(second_order=True, many_sorted=True).parse

@@ -506,6 +506,11 @@ identity. The translations are catalogued, with their guarantees, in
    ctl_au
    FuzzyKripkeModel
    satisfies_fuzzy_modal
+   FuzzyModalSearchResult
+   fuzzy_modal_search
+   fuzzy_modal_countermodel
+   fuzzy_kripke_model_to_dict
+   fuzzy_kripke_model_from_dict
    standard_translation
    qml_translate
    qml_is_valid

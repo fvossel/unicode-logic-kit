@@ -50,13 +50,19 @@ class TestModalMode:
         with pytest.raises(NamingError):
             p.parse("□∀x (Mortal(x))")
 
-    def test_modal_with_fuzzy_raises(self):
-        with pytest.raises(ValueError):
-            MSFLParser(modal=True, fuzzy=True)
+    def test_modal_with_fuzzy_is_its_own_mode(self):
+        """The modal operators over the Łukasiewicz connectives
+        (tests/test_fuzzy_mode_combinations.py)."""
+        p = MSFLParser(modal=True, fuzzy=True)
+        assert p._mode == "flmodal"
+        assert type(p.parse("□P → P")).__name__ == "LukImplication"
 
-    def test_modal_with_both_raises(self):
-        with pytest.raises(ValueError):
-            MSFLParser(modal=True, many_sorted=True, fuzzy=True)
+    def test_modal_with_fuzzy_and_many_sorted_is_its_own_mode(self):
+        p = MSFLParser(modal=True, many_sorted=True, fuzzy=True)
+        assert p._mode == "flmodal_sorted"
+        assert p.parse("□∀x:Human (Mortal(x))").to_unicode_str() == "□∀x:Human Mortal(x)"
+        with pytest.raises(NamingError):
+            p.parse("□∀x (Mortal(x))")
 
     def test_default_modal_false(self):
         assert MSFLParser()._mode == "fol"

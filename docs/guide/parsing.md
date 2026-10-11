@@ -47,28 +47,39 @@ The modal and higher-order modes are FOL plus their own operators, over unsorted
 - **linear** (`linear=True`) — intuitionistic linear logic `⊗ ⊸ & ⊕ !` with the units `𝟙 ⊤ 𝟘`.
 - **lambek** (`lambek=True`) — the Lambek calculus `• \ /` over atomic categories.
 
-The constructor rejects an unsupported combination with a clear `ValueError`. `fuzzy` combines with `many_sorted` and with nothing else, and `third_order` already contains second-order syntax:
+`fuzzy=True` combines with the same three choices. Next to each of the twelve classical modes stands a fuzzy one, with the Łukasiewicz connectives in place of the two-valued ones; FL and MSFL are the two of the first order without the modal family:
+
+| order | `fuzzy=True` | + `many_sorted=True` | + `modal=True` | + `modal=True, many_sorted=True` |
+|---|---|---|---|---|
+| first | FL | MSFL | fuzzy modal | sorted fuzzy modal |
+| `second_order=True` | fuzzy second-order | sorted fuzzy second-order | fuzzy second-order modal | sorted fuzzy second-order modal |
+| `third_order=True` | fuzzy third-order | sorted fuzzy third-order | fuzzy third-order modal | sorted fuzzy third-order modal |
+
+A fuzzy mode reads a formula over `¬ ∧ ∨ → ↔` as the classical mode of the same choices reads it, with the fuzzy node at each connective (`WeakConjunction` for `∧`, `LukImplication` for `→`, …). `⊕` is the strong disjunction there, not exclusive or, and `⊗` the strong conjunction. The forms whose reading is two-valued are in no fuzzy mode: the counting quantifier `∃≥n`, `but`, the measure term `μ(…)` and the cardinality term `|{x : φ}|`. {doc}`fuzzy` says what evaluates and decides these formulas.
+
+The constructor rejects an unsupported combination with a clear `ValueError`: `third_order` already contains second-order syntax, and a standalone logic takes no other flag.
 
 ```python
 from unicode_logic_kit import MSFLParser
 
-for kwargs in [dict(modal=True, fuzzy=True),
-               dict(second_order=True, fuzzy=True),
-               dict(third_order=True, second_order=True)]:
+for kwargs in [dict(third_order=True, second_order=True),
+               dict(linear=True, fuzzy=True)]:
     try:
         MSFLParser(**kwargs)            # raises
     except ValueError as e:
         print(str(e)[:46])
-# → modal=True cannot be combined with fuzzy in v1
-# → second_order=True cannot be combined with fuzz
-# → third_order=True cannot be combined with fuzzy
+# → third_order=True cannot be combined with secon
+# → linear=True cannot be combined with any other 
 
-# The order, modal and many_sorted combine freely:
+# The order, modal, many_sorted and fuzzy combine freely:
 MSFLParser(modal=True, many_sorted=True).parse("□∀x:Human (Mortal(x))")
 MSFLParser(second_order=True, many_sorted=True).parse("∀P (∀x:Human P(x) → ∃x:Human P(x))")
 MSFLParser(second_order=True, modal=True).parse("∀P (□P → P)")
 MSFLParser(third_order=True, many_sorted=True).parse("∀x:Human ∃P (Pos(P) ∧ P(x))")
 MSFLParser(third_order=True, modal=True, many_sorted=True).parse("∀P (Pos(P) → □∀x:Being (P(x) → Pos(P)))")
+MSFLParser(fuzzy=True, modal=True).parse("□(P ⊗ Q) → □P")
+MSFLParser(fuzzy=True, second_order=True).parse("∀P (P ⊕ ¬P)")
+MSFLParser(fuzzy=True, third_order=True, modal=True, many_sorted=True).parse("∀x:Being (Pos(G) → □G(x))")
 ```
 
 ## Unicode surface syntax

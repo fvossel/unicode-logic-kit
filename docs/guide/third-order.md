@@ -303,3 +303,16 @@ theory = isabelle_ho_modal_theory(
 Under an actualist `mode=` the witness of a sort exists at the world (it goes through the guarded binder like any `∃x`), while the membership of a constant is not guarded: a constant is a rigid designator that may lie outside the domain of a world. The goal above is therefore a theorem with constant domains and has a countermodel with varying ones, where `∀x:Human` ranges over the humans that exist at the world and `socrates` need not be one of them; `qml_is_valid` says the same of the formula read at first order.
 
 A bound predicate variable that has the name of a sort is refused by every one of these writers (and by the Kripke evaluator): the sort and the unary predicate of its name are one symbol, so the quantifier would capture the guard of `∀x:S`.
+
+## The fuzzy third-order modes
+
+`third_order=True` combines with `fuzzy=True` (and then with `modal=True` and `many_sorted=True` as before): the argument layer is the one of this page, a predicate or a λ-abstraction where a term may stand, over the Łukasiewicz connectives. The typing of the slots is the same.
+
+```python
+flto = MSFLParser(third_order=True, fuzzy=True)
+node = flto.parse("Pos(G) → ¬Pos(λx. ¬G(x))")
+type(node).__name__              # → 'LukImplication'
+node.to_unicode_str()            # → 'Pos(G) → ¬Pos(λx. ¬G(x))'
+```
+
+What reads such a formula is narrower than at two values. The fuzzy routes take a third-order atom as a letter named by its written form, or compute it from a function the caller gives (`fuzzy_evaluate(…, functionals=…)`), and they refuse a quantifier over a predicate that stands in argument position. The evaluator `satisfies_to` and the writers of this page are two-valued and refuse the Łukasiewicz connectives by name. {doc}`fuzzy` has the details under "Third-order atoms".

@@ -15,11 +15,20 @@ Atom semantics over [0, 1]:
 * ``LukImplication``     a → b    = min(1, 1 − a + b)
 * ``LukEquivalence``     a ↔ b    = 1 − |a − b|
 
-This v1 is propositional: a quantifier anywhere in the formula raises a clear
-``NotImplementedError`` suggesting that the formula be grounded first.
+An individual quantifier is grounded over a ``domain`` (``sort_universes``) of constant
+names into a finite weak ∧ / ∨; without one it is refused. A predicate quantifier
+(``∀P`` / ``∃P``) is the infimum / supremum over the fuzzy interpretations of its
+predicate and is stated in the arithmetic itself
+(:mod:`~unicode_logic_kit.atp.z3_fuzzy_kripke`): ``∀P (P ⊕ ¬P)`` is valid, ``∀P (P ∨ ¬P)``
+is not (its degree is ``1/2``). A modal operator has no reading under one valuation and
+is refused with a pointer to
+:func:`~unicode_logic_kit.atp.z3_fuzzy_kripke.fuzzy_modal_search`.
 
 An atom is a letter named by the text it prints as (a sorted constant ``c:S`` is the
-constant ``c``). A comparison atom (``a = a``, ``1 < 2``) has no Łukasiewicz degree and is
+constant ``c``). A third-order atom (``Pos(G)``) is such a letter too: the property is
+taken by name, so a formula reported valid is valid whatever ``Pos`` is, and a model
+may give ``Pos(G)`` and ``Pos(H)`` different degrees where ``G`` and ``H`` agree. A
+comparison atom (``a = a``, ``1 < 2``) has no Łukasiewicz degree and is
 refused by name, exactly as :func:`~unicode_logic_kit.semantics.fuzzy.evaluate` refuses it,
 and so are two different atoms that print alike.
 
@@ -37,9 +46,10 @@ from z3 import Solver, Real, RealVal, If, And as Z3And, sat, unsat
 
 from ..fol._atom_keys import AtomKeys, atom_key
 from ..fol._free_parameters import free_parameter_names
+from ..fol import _hybrid_nodes, _modal_nodes
 from ..fol.nodes import (
     Node, Atom,
-    Quantifier, SortedQuantifier,
+    Quantifier, SortedQuantifier, SecondOrderQuantifier,
     LukNegation, WeakConjunction, WeakDisjunction,
     StrongConjunction, StrongDisjunction,
     LukImplication, LukEquivalence,
@@ -132,6 +142,13 @@ def _collect_atoms(formula: Node, atom_vars: dict, keys: Optional[AtomKeys] = No
         _collect_atoms(formula.left, atom_vars, keys)
         _collect_atoms(formula.right, atom_vars, keys)
         return
+    if type(formula).__module__ in (_modal_nodes.__name__, _hybrid_nodes.__name__):
+        raise TypeError(
+            f"z3_fuzzy: {type(formula).__name__} is a modal operator, and a modal formula "
+            "has a degree at a world of a model, not under one valuation of its atoms. "
+            "Search the fuzzy Kripke models for a countermodel with "
+            "atp.z3_fuzzy_kripke.fuzzy_modal_search."
+        )
     raise TypeError(
         f"z3_fuzzy: unsupported node type {type(formula).__name__}. "
         "Expected a propositional Łukasiewicz formula (parse with "
@@ -199,7 +216,7 @@ def _degree(formula: Node, atom_vars: dict, ops: dict):
 
 
 def degree_expr(formula: Node, tnorm: str = "lukasiewicz",
-                domain=None, sort_universes=None):
+                domain=None, sort_universes=None, below_one: bool = False):
     """Build the Z3 degree expression and unit-interval constraints for formula.
 
     Returns a triple ``(expr, constraints, atom_vars)`` where:
@@ -207,9 +224,17 @@ def degree_expr(formula: Node, tnorm: str = "lukasiewicz",
     * ``expr`` is a Z3 ``Real`` expression for the formula's truth degree under
       the chosen ``tnorm`` (``"lukasiewicz"`` or ``"godel"``),
     * ``constraints`` is a list of ``0 <= v`` and ``v <= 1`` bounds, one pair
-      per distinct ground atom,
+      per distinct ground atom, and for a formula with a predicate quantifier the
+      constraint that defines the degree of each (an infimum or supremum),
     * ``atom_vars`` maps each atom key (``atom_key``: every constant by its bare name) to its Z3
-      ``Real`` variable.
+      ``Real`` variable; the atoms of a bound predicate are not among them.
+
+    A formula with a predicate quantifier (``∀P`` / ``∃P``) is encoded by
+    :func:`~unicode_logic_kit.atp.z3_fuzzy_kripke.second_order_degree_expr`, which also
+    refuses bound predicates applied to two different terms that are not both names of
+    ``domain`` / ``sort_universes``. ``below_one=True`` asks, for such a formula, for a
+    term that can be below 1 exactly when the degree can, which is what a validity check
+    needs and costs fewer quantifiers; for every other formula it changes nothing.
 
     A quantified formula is first **grounded** over ``domain`` (unsorted ∀x/∃x) and
     ``sort_universes`` (sorted quantifiers) into a finite weak ∧/∨, so quantified
@@ -226,6 +251,9 @@ def degree_expr(formula: Node, tnorm: str = "lukasiewicz",
     ``NotImplementedError``. A sorted constant ``c:S`` is the constant ``c``: one key.
     """
     ops = _z3_tnorm_ops(tnorm)
+    if formula.count(SecondOrderQuantifier):
+        from .z3_fuzzy_kripke import second_order_degree_expr
+        return second_order_degree_expr(formula, tnorm, domain, sort_universes, below_one)
     if formula.count(Quantifier) or formula.count(SortedQuantifier):
         parameters = free_parameter_names([formula])
         if parameters:
@@ -311,7 +339,7 @@ def fuzzy_is_valid(formula: Node, timeout: int = 10000,
     ``tnorm`` selects the strong-connective semantics (``"lukasiewicz"`` / ``"godel"``);
     a quantified formula is grounded over ``domain`` / ``sort_universes`` first.
     """
-    expr, constraints, _ = degree_expr(formula, tnorm, domain, sort_universes)
+    expr, constraints, _ = degree_expr(formula, tnorm, domain, sort_universes, below_one=True)
 
     solver = Solver()
     solver.set("timeout", timeout)

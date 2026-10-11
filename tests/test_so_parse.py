@@ -54,9 +54,14 @@ class TestSecondOrderMode:
         with pytest.raises(NamingError):
             p.parse("∀P ∀x (P(x))")
 
-    def test_so_with_fuzzy_raises(self):
-        with pytest.raises(ValueError):
-            MSFLParser(second_order=True, fuzzy=True)
+    def test_so_with_fuzzy_is_its_own_mode(self):
+        """Predicate quantifiers over the Łukasiewicz connectives
+        (tests/test_fuzzy_mode_combinations.py)."""
+        p = MSFLParser(second_order=True, fuzzy=True)
+        assert p._mode == "flso"
+        node = p.parse("∀P (P ∨ ¬P)")
+        assert (node.predicate, node.arity) == ("P", 0)
+        assert type(node.formula).__name__ == "WeakDisjunction"
 
     def test_so_with_modal_is_its_own_mode(self):
         """Second-order quantifiers and the modal operators in one formula.
@@ -69,9 +74,11 @@ class TestSecondOrderMode:
         with pytest.raises(NamingError):
             p.parse("Pos(G)")
 
-    def test_so_with_all_raises(self):
-        with pytest.raises(ValueError):
-            MSFLParser(second_order=True, many_sorted=True, fuzzy=True, modal=True)
+    def test_so_with_every_other_flag_is_its_own_mode(self):
+        p = MSFLParser(second_order=True, many_sorted=True, fuzzy=True, modal=True)
+        assert p._mode == "flsomodal_sorted"
+        assert (p.parse("∀P (□∀x:Human P(x) → ∀x:Human □P(x))").to_unicode_str()
+                == "∀P (□∀x:Human P(x) → ∀x:Human □P(x))")
 
 
 # ---------------------------------------------------------------------------

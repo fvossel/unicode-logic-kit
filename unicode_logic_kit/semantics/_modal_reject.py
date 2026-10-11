@@ -1,11 +1,11 @@
-"""Shared "out-of-scope node" rejection helpers for the modal v1 back-ends.
+"""Shared "out-of-scope node" rejection helpers for the two-valued modal back-ends.
 
-Both the Kripke evaluator (:mod:`kripke`) and the standard translation
-(:mod:`..fol.modal_translation`) interpret only the **propositional / ground**
-modal fragment in v1. First-order quantifiers, Łukasiewicz (fuzzy) operators,
-and lambda-calculus nodes are out of scope and are rejected uniformly here with
-a clear NotImplementedError, so the message wording stays consistent across the
-two modules.
+The Kripke evaluator (:mod:`kripke`) and the standard translation
+(:mod:`..fol.modal_translation`) are two-valued. Łukasiewicz (fuzzy) operators
+and lambda-calculus nodes are out of scope there and are rejected uniformly here
+with a clear NotImplementedError, so the message wording stays consistent across
+the two modules. (The graded evaluator :mod:`fuzzy_kripke`, which reads the
+Łukasiewicz operators, shares the lambda refusal.)
 
 An **equality atom** (``a = b`` / ``a ≠ b``) is out of scope for every route
 that has no TERM semantics, and :func:`reject_equality` is the one place that
@@ -38,20 +38,13 @@ FUZZY_TYPES = (
 LAMBDA_TYPES = (LambdaVar, Lambda, Application)
 
 
-def reject_quantifier(formula: Node, caller: str) -> NoReturn:
-    """Reject a (sorted) quantifier: v1 modal logic is propositional / ground."""
-    raise NotImplementedError(
-        f"{caller}: {type(formula).__name__} is not supported — v1 modal logic "
-        "is propositional / ground; first-order (quantified) modal logic is "
-        "future work."
-    )
-
-
 def reject_fuzzy(formula: Node, caller: str) -> NoReturn:
-    """Reject a Łukasiewicz node: modal v1 is two-valued, not fuzzy."""
+    """Reject a Łukasiewicz node: this route is two-valued."""
     raise NotImplementedError(
         f"{caller}: Łukasiewicz node {type(formula).__name__} is not supported — "
-        "modal v1 is two-valued; fuzzy modal logic is future work."
+        "this route is two-valued. A fuzzy modal formula has a degree at a world of "
+        "a fuzzy Kripke model: semantics.fuzzy_kripke.satisfies_fuzzy_modal evaluates "
+        "it, and atp.z3_fuzzy_kripke.fuzzy_modal_search looks for a countermodel."
     )
 
 

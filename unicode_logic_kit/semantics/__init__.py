@@ -16,11 +16,13 @@ Two complementary evaluators:
   SIGNATURE rather than its arity, since at this level arity no longer says what
   a predicate is.
 - The **Łukasiewicz fuzzy** evaluator :func:`evaluate`, which computes the truth
-  degree in [0, 1] of an FL/MSFL formula under a valuation.
+  degree in [0, 1] of a fuzzy formula under a valuation: individual quantifiers
+  over a finite domain, and predicate quantifiers as the infimum or supremum over
+  the fuzzy interpretations of their predicate.
 - The **graded (fuzzy) Kripke** evaluator :func:`satisfies_fuzzy_modal`, which
-  computes the truth degree in [0, 1] of a propositional modal formula at a
+  computes the truth degree in [0, 1] of a fuzzy modal formula at a
   world of a :class:`FuzzyKripkeModel` (weighted accessibility relations,
-  graded valuations) under a chosen t-norm.
+  graded valuations, one domain for all worlds) under a chosen t-norm.
 """
 
 from .tarski import (

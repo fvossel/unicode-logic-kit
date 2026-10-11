@@ -69,6 +69,11 @@ MODES = {
     "to_sorted": {"third_order": True, "many_sorted": True},
     "tomodal_sorted": {"third_order": True, "modal": True, "many_sorted": True},
 }
+# The fuzzy sibling of every mode that has an order above the first or the modal
+# family ("fl" and "msfl" are the two above).
+MODES.update({
+    "fl" + mode: {**kwargs, "fuzzy": True} for mode, kwargs in list(MODES.items())
+    if kwargs.get("modal") or kwargs.get("second_order") or kwargs.get("third_order")})
 
 FOLIO =[l.strip() for l in
          (Path("tests/fixtures/folio_fol_strings.txt")
@@ -139,12 +144,16 @@ def test_modal_is_the_only_holdout_and_it_is_deliberate():
     by itself a reason to keep a fallback. The same holds for ``to_sorted``,
     and the three other modes with the modal operators (``somodal``,
     ``somodal_sorted``, ``tomodal_sorted``) are on the list for the reason
-    ``tomodal`` is. So the list is exactly the modes built with ``modal=True``."""
-    assert _HYBRID_MODES == frozenset({"modal", "modal_sorted", "tomodal",
-                                       "somodal", "somodal_sorted", "tomodal_sorted"})
+    ``tomodal`` is. A fuzzy mode has the modal language exactly when its
+    classical sibling has it. So the list is exactly the modes built with
+    ``modal=True``."""
+    classical = {"modal", "modal_sorted", "tomodal",
+                 "somodal", "somodal_sorted", "tomodal_sorted"}
+    assert _HYBRID_MODES == frozenset(classical | {"fl" + mode for mode in classical})
     assert _HYBRID_MODES == frozenset(m for m, kwargs in MODES.items() if kwargs.get("modal"))
-    assert MSFLParser(**MODES["so_sorted"])._earley_parser is None
-    assert MSFLParser(**MODES["to_sorted"])._earley_parser is None
+    assert set(MODES) == set(_REGISTRY_MODE)
+    for mode in ("so_sorted", "to_sorted", "flso_sorted", "flto_sorted", "flso", "flto"):
+        assert MSFLParser(**MODES[mode])._earley_parser is None
 
 
 def test_modal_still_accepts_what_only_earley_reaches():

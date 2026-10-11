@@ -5,6 +5,10 @@ from .z3_models import is_satisfiable, is_valid, get_model
 from .z3_fuzzy import (
     fuzzy_is_satisfiable, fuzzy_is_valid, fuzzy_get_model, degree_expr,
 )
+from .z3_fuzzy_kripke import (
+    FuzzyModalSearchResult, fuzzy_modal_search, fuzzy_modal_countermodel,
+    fuzzy_kripke_model_to_dict, fuzzy_kripke_model_from_dict,
+)
 from .z3_arith import (
     to_z3_arith, is_satisfiable_arith, is_valid_arith, get_model_arith, ArithEnv,
 )
@@ -109,6 +113,8 @@ __all__ = [
     "check_logical_entailment_vampire",
     "is_satisfiable", "is_valid", "get_model",
     "fuzzy_is_satisfiable", "fuzzy_is_valid", "fuzzy_get_model", "degree_expr",
+    "FuzzyModalSearchResult", "fuzzy_modal_search", "fuzzy_modal_countermodel",
+    "fuzzy_kripke_model_to_dict", "fuzzy_kripke_model_from_dict",
     "to_z3_arith", "is_satisfiable_arith", "is_valid_arith", "get_model_arith", "ArithEnv",
     "to_clauses", "refute", "prove", "is_valid_resolution",
     "ResolutionStep", "ResolutionDerivation", "ResolutionCheckResult",
