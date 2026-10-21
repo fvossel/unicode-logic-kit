@@ -2047,6 +2047,8 @@ _DL_TEXT_ERRORS = {"ConceptSyntaxError", "ManchesterSyntaxError"}
 _DL_OFF_THE_TOOL_PATH = {
     "OwlFunctionalSyntaxError": "the OWL Functional-Style reader; no tool reads it",
     "OwlFunctionalUnsupportedError": "the OWL Functional-Style reader; no tool reads it",
+    "OwlRdfXmlSyntaxError": "the OWL RDF/XML reader; no tool reads it",
+    "_Refusal": "inside the OWL RDF/XML reader, which reports it as a RefusedAxiom",
     "OwlReasonerError": "the external HermiT route; no dl_* tool calls it",
     "RoleBoxOmittedError": "raised by dl.kb_to_fol; no dl_* tool renders FOL",
 }

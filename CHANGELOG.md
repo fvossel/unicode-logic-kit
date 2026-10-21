@@ -7,6 +7,36 @@ breaking changes.
 
 ## [Unreleased]
 
+An OWL 2 ontology published as RDF/XML is read directly. The OBO Foundry's ontologies (ENVO, ChEBI, …) and the Open Energy Ontology are published that way, and until now the kit read an ontology only in Functional-Style Syntax or through Hets, which needs Docker. Requested by the (F^4)OL project.
+
+### `dl.parse_owl_rdfxml` — RDF/XML, with every refusal as data
+
+`dl.parse_owl_rdfxml(source, base=None, names="local")` takes a path, the text or its bytes and needs no third-party package. It reads the triples by the grammar of RDF 1.1 XML Syntax over the standard library's XML parser (typed node elements, property attributes, `rdf:parseType` `Resource` / `Collection` / `Literal`, `rdf:nodeID`, `rdf:ID`, `rdf:li`, `xml:base`, `xml:lang`, the entities a DTD declares; relative IRIs by RFC 3986, section 5.2), as a stream: each node element under `rdf:RDF` becomes its triples at its end tag and is then dropped, so the XML tree of a whole large ontology is never held. It turns them into axioms by the reverse of the W3C mapping *OWL 2 Mapping to RDF Graphs*: declarations, class axioms, the class expressions and data ranges of blank nodes, restrictions with their (qualified) cardinalities, inverse properties, property inclusions and chains, the property characteristics, domains and ranges, assertions, `owl:AllDifferent` / `owl:AllDisjointClasses` / `owl:AllDisjointProperties`, negative property assertions and datatype definitions. Each axiom is written as Functional-Style text and read by `parse_owl_functional_axioms`, so the fragment, the refusals and their reasons are that reader's: an RDF/XML file and its Functional-Syntax rendering give the same knowledge base.
+
+The result, `OwlRdfResult`, is an `OwlFunctionalResult` with seven more fields: `axioms` (one `AcceptedAxiom` per accepted axiom — keyword, Functional-Syntax text, offset, and the entity its triple is about — so a caller can read each axiom alone, which a TBox does not allow: one `EquivalentClasses` is two inclusions), `iris` (name → IRI, one to one; an entity is named by the local name of its IRI unless that is empty, holds a `:` or belongs to two IRIs, and `names="iri"` names it by its full IRI), `functional_text`, `annotations` (annotation assertions, ontology annotations and the annotations of reified axioms, skipped and counted), `deprecated`, `imports` (listed, not followed) and `ontology_iri`.
+
+A triple the mapping has no OWL 2 reading for is a `RefusedAxiom` with position `-1`, its triples in N-Triples form and the reason: a predicate that is neither OWL 2 vocabulary nor a declared property, `rdf:type` of no class, an axiom whose reading depends on a property kind no declaration states and no well-typed reading decides, a malformed list, restriction or cardinality, an n-ary data restriction, and every triple that no construct read. Malformed XML raises `OwlRdfXmlSyntaxError`.
+
+Measured on the Open Energy Ontology 2.13.0 (`oeo-full.owl`, 3.85 MB): about half a second for the whole file, with the triples peaking at 6 MiB of memory (21 MiB with the whole XML tree held); 4005 axioms accepted, 36 consumed, none refused; the same TBox and ABox, field by field, as the requesting project's own reader, which was written independently from rdflib's triples; and the same triples as rdflib 7.6.0.
+
+### Changed messages
+
+- A refusal or syntax error of the Functional-Syntax readers quoted the whole document after the position it points to, so each refusal of an ontology-sized document carried the document once. A document longer than 2000 characters is now named by its length (`in a document of 4123456 characters`); a shorter one is quoted as before.
+
+### Documentation
+
+The description-logic guide has a section "Reading RDF/XML"; the API page lists `parse_owl_rdfxml`, `OwlRdfResult` and `AcceptedAxiom`.
+
+### Tests
+
+`tests/test_owl_rdfxml.py` (155 tests): every construct as RDF/XML against its hand-written Functional-Syntax rendering (the same TBox, ABox, consumed axioms and refusals, and every accepted axiom read alone adding up to the whole), each refusal of the mapping, annotations and their counts, names, sources and bases, the RDF/XML grammar against hand-derived triples, a document read across the 64 KiB pieces it is fed in (with a two-byte character split by one) and a tree that holds at most three node elements at a time, IRI resolution against every example of RFC 3986, section 5.4, and — where rdflib is installed — the triples of every test document against rdflib's. With `$UFK_OEO_OWL` set to a local `oeo-full.owl`, `tests/test_owl_corpus.py` reads the file and, with `$UFK_OEO_AXIOMS_JSONL` as well, compares it with the record file; neither file is committed.
+
+### Limits
+
+- RDF/XML only: not Turtle, N-Triples or OWL/XML. `owl:imports` is not followed.
+- A property is an object, data or annotation property by its declaration. Where none is given, the kind is taken only where one reading is well typed; an ontology that leaves its declarations to an import it does not carry has those axioms refused by name.
+- The XML literal of `rdf:parseType="Literal"` is the content as the XML library writes it, not its exclusive canonical form.
+
 ## [0.33.0] - 2026-10-11
 
 The fuzzy connectives combine with the order, the modal family and sorts. `fuzzy=True` next to the three choices of a classical mode gives twelve fuzzy modes, of which ten are new: the modal operators, the predicate quantifiers `∀P` / `∃P` and a predicate in argument position stand over the Łukasiewicz connectives, with or without sorts. Each has a meaning as far as this release carries it. A fuzzy modal formula is evaluated over a fuzzy Kripke model, quantifiers included, and searched for a countermodel with a bounded number of worlds. A predicate quantifier is the exact infimum or supremum over the FUZZY interpretations of its predicate, in the evaluators and in the deciders. A third-order atom is a letter named by its written form, or is computed by a function of the caller; a quantifier over a predicate in argument position is refused by name. The grammar of every mode that existed is byte for byte the one of 0.32.0. One defect of earlier versions is fixed on the way (see "Fixed"): a quantified variable inside a lambda term in argument position was not instantiated.

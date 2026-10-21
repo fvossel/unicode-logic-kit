@@ -208,6 +208,14 @@ still raises::
     doc.ok, doc.accepted, doc.refused_keywords
     kb = doc.to_kb()        # == dl.kb_to_fol(doc.tbox, doc.abox)
 
+An ontology published as RDF/XML (the OBO Foundry's, the Open Energy Ontology)
+is read by ``dl.parse_owl_rdfxml(path)`` (:mod:`unicode_logic_kit.dl.owl_rdfxml`):
+the same result for the same ontology, plus the accepted axioms one by one, a
+name -> IRI map and the annotation census::
+
+    doc = dl.parse_owl_rdfxml("envo.owl")
+    doc.axioms[0].text, doc.axioms[0].subject, doc.iris["ENVO_01000201"]
+
 One limit to know before printing an image that mentions an individual: the kit
 decides predicate-versus-term by the first character's case, so an UPPER-case
 individual name -- the norm for an OWL IRI -- prints as itself and does not read
@@ -340,6 +348,7 @@ from .owl_functional import (
     OwlFunctionalResult, RefusedAxiom, ConsumedAxiom,
     OwlFunctionalSyntaxError, OwlFunctionalUnsupportedError,
 )
+from .owl_rdfxml import parse_owl_rdfxml, OwlRdfResult, AcceptedAxiom, OwlRdfXmlSyntaxError
 from .owl_reasoner import (
     available as owl_reasoner_available,
     external_concept_satisfiable, external_concept_unsatisfiable,
@@ -375,6 +384,7 @@ __all__ = [
     "parse_owl_functional_class_expression", "to_owl_functional_class_expression",
     "OwlFunctionalResult", "RefusedAxiom", "ConsumedAxiom",
     "OwlFunctionalSyntaxError", "OwlFunctionalUnsupportedError",
+    "parse_owl_rdfxml", "OwlRdfResult", "AcceptedAxiom", "OwlRdfXmlSyntaxError",
     "owl_reasoner_available",
     "external_concept_satisfiable", "external_concept_unsatisfiable",
     "external_subsumes", "external_equivalent",

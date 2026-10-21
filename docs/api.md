@@ -1186,6 +1186,25 @@ whole (see the name rule above). The strict `parse_owl_functional` drops the
 annotation-property axioms and the tautological property inclusions without a
 report; `parse_owl_functional_axioms` lists them in `consumed`.
 
+`parse_owl_rdfxml(source, base=None, names="local")` reads an ontology published
+as RDF/XML (a path, the text or its bytes), with no third-party package: the
+triples by the RDF 1.1 XML grammar, then the reverse of the W3C OWL 2 mapping,
+each axiom written as Functional-Style text and read by
+`parse_owl_functional_axioms`, so an RDF/XML file and its Functional-Syntax
+rendering give the same TBox, ABox, consumed axioms and refusals. Its
+`OwlRdfResult` is an `OwlFunctionalResult` with seven more fields: `axioms`
+(one `AcceptedAxiom` per accepted axiom — keyword, Functional-Syntax text, offset
+and the entity its triple is about — so each reads alone with
+`parse_owl_functional_axioms("Ontology(" + text + ")")`), `iris` (name -> IRI,
+one to one: an entity is named by the local name of its IRI where that is
+unique, or by its full IRI with `names="iri"`), `functional_text`,
+`annotations` (skipped and counted), `deprecated`, `imports` (not followed) and
+`ontology_iri`. A triple with no OWL 2 reading — an undeclared predicate,
+`rdf:type` of no class, a property whose kind decides the axiom and is not
+declared, a malformed list or restriction — is a `RefusedAxiom` with position
+-1, its triples in N-Triples form and the reason, never dropped. Malformed XML
+raises `OwlRdfXmlSyntaxError`.
+
 One limit worth knowing before printing an image that mentions an individual:
 the kit decides predicate-versus-term by the first character's case, so an
 upper-case individual name — the norm for an OWL IRI — prints as itself and does
@@ -1250,6 +1269,9 @@ not read back as the same formula. `Alice = Bob` does not parse at all;
    OwlFunctionalResult
    RefusedAxiom
    ConsumedAxiom
+   parse_owl_rdfxml
+   OwlRdfResult
+   AcceptedAxiom
    concept_satisfiable
    concept_unsatisfiable
    subsumes
@@ -1280,6 +1302,7 @@ not read back as the same formula. `Alice = Bob` does not parse at all;
    ManchesterSyntaxError
    OwlFunctionalSyntaxError
    OwlFunctionalUnsupportedError
+   OwlRdfXmlSyntaxError
    owl_reasoner_available
    external_concept_satisfiable
    external_concept_unsatisfiable

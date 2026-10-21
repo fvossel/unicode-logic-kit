@@ -1649,6 +1649,53 @@ abox = (dl.ABox()
 print(dl.abox_consistent(abox))   # → False
 ```
 
+### Reading RDF/XML
+
+Ontologies are published as RDF/XML (the OBO Foundry's ENVO and ChEBI, the Open Energy Ontology). `dl.parse_owl_rdfxml(source)` reads such a file — a path, the text or its bytes — with no Docker, no Java and no third-party package, in two steps: the triples, by the grammar of RDF 1.1 XML Syntax over the standard library's XML parser (DTD entities such as `&obo;` expanded, relative IRIs resolved by RFC 3986); then the reverse of the W3C mapping *OWL 2 Mapping to RDF Graphs*, which writes each axiom as Functional-Style text for `dl.parse_owl_functional_axioms`. So the fragment, the refusals and their words are that reader's, and an RDF/XML file and its Functional-Syntax rendering give the same knowledge base. The result is an `OwlFunctionalResult` with seven more fields:
+
+```python
+import unicode_logic_kit.dl as dl
+
+doc = dl.parse_owl_rdfxml("""<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#">
+  <owl:ObjectProperty rdf:about="http://purl.obolibrary.org/obo/RO_0000056"/>
+  <owl:Class rdf:about="http://purl.obolibrary.org/obo/ENVO_01001793"/>
+  <owl:Class rdf:about="http://purl.obolibrary.org/obo/ENVO_01001827"/>
+  <owl:Class rdf:about="http://purl.obolibrary.org/obo/ENVO_01000201">
+    <rdfs:label>subtropical broadleaf forest biome</rdfs:label>
+    <owl:equivalentClass>
+      <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+          <rdf:Description rdf:about="http://purl.obolibrary.org/obo/ENVO_01001793"/>
+          <owl:Restriction>
+            <owl:onProperty rdf:resource="http://purl.obolibrary.org/obo/RO_0000056"/>
+            <owl:someValuesFrom rdf:resource="http://purl.obolibrary.org/obo/ENVO_01001827"/>
+          </owl:Restriction>
+        </owl:intersectionOf>
+      </owl:Class>
+    </owl:equivalentClass>
+  </owl:Class>
+</rdf:RDF>""")
+print(doc.ok, doc.accepted, doc.annotations)   # → True 1 1
+axiom = doc.axioms[0]
+print(axiom.subject, axiom.keyword)            # → ENVO_01000201 EquivalentClasses
+print(doc.iris["RO_0000056"])                  # → http://purl.obolibrary.org/obo/RO_0000056
+alone = dl.parse_owl_functional_axioms("Ontology(" + axiom.text + ")")
+print(alone.to_kb().formula.to_unicode_str())
+# → ∀x (ENVO_01000201(x) → ENVO_01001793(x) ∧ ∃x0 (RO_0000056(x, x0) ∧ ENVO_01001827(x0))) ∧ ∀x (ENVO_01001793(x) ∧ ∃x0 (RO_0000056(x, x0) ∧ ENVO_01001827(x0)) → ENVO_01000201(x))
+```
+
+- `axioms` — the accepted axioms one by one (`AcceptedAxiom`: keyword, Functional-Syntax text, offset in `functional_text`, and the entity its triple is about). A TBox does not say which inclusions came from which axiom — one `EquivalentClasses` is two of them — so a comparison per class reads the class's own axioms alone, as above.
+- `iris` — every name to its IRI, one to one. An entity is named by the local name of its IRI (`ENVO_01000201`), and by the full IRI where the local name is empty, holds a `:` or belongs to two IRIs; `names="iri"` names every entity by its full IRI. OWL 2's own vocabulary keeps its prefixed spelling (`owl:Thing`, `xsd:integer`).
+- `functional_text` — the Functional-Syntax document the axioms were written as; the positions of the Functional-Syntax reader's refusals point into it.
+- `annotations`, `deprecated`, `imports`, `ontology_iri` — annotation assertions, ontology annotations and the annotations of reified axioms (`owl:Axiom`, the OBO form of a definition's cross-references) are skipped and counted; an entity annotated `owl:deprecated true` is listed; `owl:imports` is listed and not followed.
+
+A triple the mapping has no OWL 2 reading for is reported, not dropped: a `RefusedAxiom` with position `-1`, the triples in N-Triples form and the reason. That covers a predicate that is no OWL 2 vocabulary and is not declared as a property, `rdf:type` of something that is not a declared class, an axiom whose reading depends on a property kind the document does not declare (where only one reading is well typed it is taken: a restriction's filler tells an object property from a data property, one declared side of `rdfs:subPropertyOf` gives the other side its kind), a malformed list or restriction, an n-ary data restriction, and any triple left over that no construct read. Malformed XML raises `OwlRdfXmlSyntaxError`.
+
+Measured on the Open Energy Ontology 2.13.0 (`oeo-full.owl`, 3.85 MB, 35061 triples): the whole file in about half a second, 4005 axioms accepted, 36 consumed, none refused, 11405 annotations — and the same TBox and ABox, field by field, as the requesting project's own reader, which was written independently from rdflib's triples. The triples themselves are the ones rdflib reads.
+
 ## Inverse roles and nominals (I, O): the external OWL 2 DL reasoner
 
 Two constructs sit outside ALCHQ, this kit's in-house DL fragment: `InverseRole("r")` (the role expression `r⁻`, used wherever a plain role name is expected) and `Nominal("a")` (the singleton concept `{a}`; its disguise, the value restriction `HasValue("r", "a")` = `∃r.{a}`, is refused with it — see "Value restrictions" above for the counterexample). `dl.concepts`/`dl.tableau` recognise them all — they can be built, printed, and negated — but the in-house tableau refuses to *reason* over them, by name, rather than risk an unsound or silently-incomplete result:

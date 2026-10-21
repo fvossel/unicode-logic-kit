@@ -447,6 +447,9 @@ def _tokenize(text: str) -> List[_Token]:
 # Recursive-descent parser.
 # --------------------------------------------------------------------------- #
 
+#: The longest document a message quotes in full (see ``_Parser._where``).
+_QUOTED_DOCUMENT_LIMIT = 2000
+
 _TOP_SPELLINGS = {"owl:Thing", "http://www.w3.org/2002/07/owl#Thing"}
 _BOTTOM_SPELLINGS = {"owl:Nothing", "http://www.w3.org/2002/07/owl#Nothing"}
 
@@ -579,8 +582,16 @@ class _Parser:
         self._i += 1
         return tok
 
+    def _where(self) -> str:
+        """Where a message's position points: the document itself when it is
+        short, its length otherwise. A whole ontology quoted in every refusal
+        would put the document into the result once per refused axiom."""
+        if len(self._text) <= _QUOTED_DOCUMENT_LIMIT:
+            return f"in {self._text!r}"
+        return f"in a document of {len(self._text)} characters"
+
     def _error(self, message: str) -> OwlFunctionalSyntaxError:
-        return OwlFunctionalSyntaxError(f"parse_owl_functional: {message} in {self._text!r}")
+        return OwlFunctionalSyntaxError(f"parse_owl_functional: {message} {self._where()}")
 
     def _expect(self, ttype: str, what: str) -> _Token:
         tok = self._peek()
@@ -609,7 +620,7 @@ class _Parser:
         :func:`parse_owl_functional_axioms`.
         """
         return OwlFunctionalUnsupportedError(
-            f"parse_owl_functional: {message} in {self._text!r}",
+            f"parse_owl_functional: {message} {self._where()}",
             keyword=keyword, position=position)
 
     def _reject(self, what: str, tok: _Token) -> None:

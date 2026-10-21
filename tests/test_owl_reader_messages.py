@@ -168,3 +168,19 @@ def test_a_class_expression_nested_past_the_recursion_limit_raises_recursion_err
             + ")" * depth + "))")
     with pytest.raises(RecursionError):
         parse_owl_functional_axioms(text)
+
+
+def test_a_long_document_is_not_quoted_in_every_refusal():
+    # A message quoted the whole document after the position it points to, so
+    # every refusal of an ontology-sized document carried the document once.
+    axioms = " ".join(f"SubClassOf(A{i} B{i})" for i in range(300))
+    text = f"Ontology({axioms} SubClassOf(A ObjectOneOf(a)))"
+    (refusal,) = parse_owl_functional_axioms(text).refused
+    assert axioms not in refusal.reason
+    assert refusal.reason.endswith(f"at position {text.index('ObjectOneOf')} "
+                                   f"in a document of {len(text)} characters")
+    with pytest.raises(dl.OwlFunctionalSyntaxError, match=f"in a document of {len(text) + 1} characters"):
+        parse_owl_functional(text + ")")
+    # a short document is still quoted
+    short = "Ontology(SubClassOf(A ObjectOneOf(a)))"
+    assert parse_owl_functional_axioms(short).refused[0].reason.endswith(f"in {short!r}")

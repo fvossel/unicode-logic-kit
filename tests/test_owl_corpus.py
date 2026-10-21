@@ -17,11 +17,14 @@ variable shape. Expected images belong in a test file, hand-derived — see
 ``tests/test_owl_constructs_fixture.py``, which is the committed stand-in that
 covers every construct in the default suite.
 
-Why a JSONL of axioms rather than the ``.owl`` file: OEO ships as RDF/XML and
-this kit has no RDF reader, so there is nothing a test could do with it. The
-per-axiom record file is the only artefact the kit can consume, and it is also
-where the ``needs`` census keys live — which is what makes a per-construct
-floor possible instead of one opaque total.
+Why a JSONL of axioms as well as the ``.owl`` file: the per-axiom record file
+is where the ``needs`` census keys live, which is what makes a per-construct
+floor possible instead of one opaque total. OEO ships as RDF/XML, which
+``dl.parse_owl_rdfxml`` reads; point ``$UFK_OEO_OWL`` at ``oeo-full.owl`` and
+the last two tests read it, and with both variables set they check that the
+RDF/XML file and the record file are one knowledge base (the record file was
+written by the requesting project's own reader, from rdflib's triples, so the
+two readings are independent).
 
 What is asserted is a FLOOR per construct family, never an exact total: an OEO
 point release shifts the counts, and a test that breaks on someone else's
@@ -34,6 +37,7 @@ checked on hand-built knowledge bases in ``tests/test_dl_route_agreement.py``.
 """
 
 import collections
+import dataclasses
 import io
 import json
 import os
@@ -344,3 +348,57 @@ def test_the_whole_accepted_fragment_is_one_usable_knowledge_base():
     assert "xsd:" not in problem
     assert isinstance(hash(kb.formula), int)
     assert len(kb.premises) == 1 + len(kb.axioms)
+
+
+_REAL_OEO_OWL = os.environ.get("UFK_OEO_OWL")
+real_owl_file = pytest.mark.skipif(
+    not (_REAL_OEO_OWL and Path(_REAL_OEO_OWL).is_file()),
+    reason="set $UFK_OEO_OWL to a local oeo-full.owl (RDF/XML); the ontology "
+           "itself is never committed")
+
+
+@real_owl_file
+def test_the_rdfxml_file_reads_without_a_mapping_refusal():
+    result = dl.parse_owl_rdfxml(_REAL_OEO_OWL)
+    print(f"\n{result.accepted} accepted, {len(result.consumed)} consumed, "
+          f"{len(result.refused)} refused, {result.annotations} annotations, "
+          f"{len(result.iris)} names, {result.refused_keywords}")
+    # Every triple of the file has an OWL 2 reading; what the fragment cannot
+    # hold is the Functional-Syntax reader's to refuse, by name.
+    assert not [r for r in result.refused if r.position == -1]
+    assert len(result.axioms) == result.accepted > 3000
+    for axiom in result.axioms:
+        alone = dl.parse_owl_functional_axioms(f"Ontology({axiom.text})")
+        assert alone.accepted == 1 and alone.ok, axiom.text
+
+
+@real_owl_file
+@real_corpus
+def test_the_rdfxml_file_and_the_record_file_are_one_knowledge_base():
+    names = Path(_REAL_OEO).with_name("names.json")
+    if not names.is_file():
+        pytest.skip("names.json (the record file's symbol -> IRI map) is not beside the record file")
+    symbols = json.loads(names.read_text(encoding="utf-8"))["symbols"]
+    # Two symbols name an annotation property and an entity each; a symbol in
+    # an axiom is the entity, so the entity wins.
+    iri_of = {entry["symbol"]: iri for iri, entry in sorted(
+        symbols.items(), key=lambda item: item[1]["kind"] != "annotationProperty")}
+    token = re.compile(r'"(?:\\.|[^"\\])*"(?:\^\^[^\s()]+|@[A-Za-z\-]+)?|<[^>]*>|[^\s()"<>]+|[()]')
+
+    def with_iris(text):
+        return " ".join(f"<{iri_of[t]}>" if t in iri_of else t for t in token.findall(text))
+
+    records = dl.parse_owl_functional_axioms(
+        "Ontology(\n" + "\n".join(with_iris(r["owlfs"]) for r in _records()) + "\n)")
+    rdfxml = dl.parse_owl_rdfxml(_REAL_OEO_OWL, names="iri")
+    assert (rdfxml.accepted, len(rdfxml.consumed)) == (records.accepted, len(records.consumed))
+
+    def multisets(holder):
+        found = {}
+        for field in dataclasses.fields(holder):
+            value = getattr(holder, field.name)
+            found[field.name] = collections.Counter(repr(v) for v in value)
+        return found
+
+    for holder in ("tbox", "abox"):
+        assert multisets(getattr(rdfxml, holder)) == multisets(getattr(records, holder)), holder
