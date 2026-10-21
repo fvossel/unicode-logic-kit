@@ -7,6 +7,8 @@ breaking changes.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-10-21
+
 An OWL 2 ontology published as RDF/XML is read directly. The OBO Foundry's ontologies (ENVO, ChEBI, …) and the Open Energy Ontology are published that way, and until now the kit read an ontology only in Functional-Style Syntax or through Hets, which needs Docker. Requested by the (F^4)OL project.
 
 ### `dl.parse_owl_rdfxml` — RDF/XML, with every refusal as data
