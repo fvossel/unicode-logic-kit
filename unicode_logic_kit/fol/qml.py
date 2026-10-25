@@ -214,7 +214,7 @@ from ._hybrid_nodes import Down
 from ._fol_nodes import constant_name_to_ascii
 from ._free_parameters import free_parameter_names
 from ._identifiers import fresh_variables
-from ._msfl_nodes import key_text, nonempty_sort_axioms, sort_membership_axioms
+from ._msfl_nodes import _reduce_nl_nodes, key_text, nonempty_sort_axioms, sort_membership_axioms
 from ._truth_constants import truth_value
 from .frames import (
     FRAME_CONDITIONS, FRAMES as _SHARED_FRAMES, UnsupportedFrameCondition,
@@ -640,12 +640,18 @@ def qml_translate(formula: Node, mode: str = "constant", world: str = "w") -> No
     which constants were annotated, so the membership of a sorted constant in its sort is
     NOT part of this translation: it is an axiom, which :func:`qml_axioms` emits from the
     formula as given.
+
+    A node the classical layer defines by other nodes is read by that definition, the one
+    :func:`~unicode_logic_kit.fol.nodes.to_fol` applies: a counting quantifier ``∃≥n`` /
+    ``∃≤n`` / ``∃=n`` (sorted or not) by its distinct witnesses, which are object
+    quantifiers under ``mode`` like any other and whose distinctness is the rigid identity
+    above, and ``Contrast`` as ``∧``.
     """
     if mode not in _ACTUALIST_MODES and mode not in _CONSTANT_MODES:
         raise ValueError(
             f"qml: unknown mode {mode!r} (use one of "
             f"{sorted(_ACTUALIST_MODES | _CONSTANT_MODES)}).")
-    formula = formula._relativize([])
+    formula = _reduce_nl_nodes(formula._relativize([]))
     world = _pick_world_name(formula, world)
     fresh = _Fresh(_object_var_names(formula) | {world})
     return _st(formula, Variable(world), fresh, mode)
@@ -1293,7 +1299,7 @@ def _validity_formula(formula: Node, mode: str, frame: str, systems=None,
     # Constant qml_translate's translation will).
     axioms = qml_axioms(mode, frame, systems, formula=formula, bridges=bridges,
                         temporal_closure=temporal_closure)
-    relativized = formula._relativize([])
+    relativized = _reduce_nl_nodes(formula._relativize([]))
     axioms += _signature_typing_facts(relativized)
     parameters = [Variable(name) for name in free_parameter_names([relativized])]
     if mode in _CONSTANT_MODES:
@@ -1705,7 +1711,8 @@ def to_thf_modal(formula: Node, mode: str = "constant", frame: str = "K") -> str
     # a user constant spelled like it is refused, not merged with it.
     [formula], _ = numerals_as_constants([formula], where="to_thf_modal",
                                          spell=prefixed_numeral_name)
-    formula = _lower_identity(formula, "to_thf_modal")
+    # A counting quantifier and Contrast by their classical definitions, as in qml_translate.
+    formula = _lower_identity(_reduce_nl_nodes(formula), "to_thf_modal")
     lines = [
         f"% Shallow embedding of a quantified modal formula (mode={mode}, frame={frame}).",
         "% Conjecture is 'Theorem' iff the formula is QML-valid under this regime.",

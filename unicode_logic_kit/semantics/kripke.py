@@ -245,8 +245,8 @@ from typing import Any, Dict, FrozenSet, Iterable, Iterator, List, Mapping, Opti
 
 from ..fol.nodes import (
     Node,
-    Atom, Not, And, Or, Xor, Implies, Iff,
-    Quantifier, SecondOrderQuantifier, PredicateTerm,
+    Atom, Not, And, Or, Xor, Implies, Iff, Contrast,
+    Quantifier, Count, SecondOrderQuantifier, PredicateTerm,
     Box, Diamond, Knows, Believes, Says, Wants,
     Always, Eventually, Next, Until,
     Historically, Once, Previous, Since,
@@ -721,7 +721,7 @@ def _bound_instances(node: SecondOrderQuantifier, model: KripkeModel) -> List[At
                     instance = substitute(instance, Variable(variable), Constant(individual))
                 assert isinstance(instance, Atom)
                 found.setdefault(atom_key(instance), instance)
-        if isinstance(sub, Quantifier):
+        if isinstance(sub, (Quantifier, Count)):      # both bind an object variable
             inner = bound if sub.variable.name in bound else bound + (sub.variable.name,)
             visit(sub.formula, inner)
             return
@@ -786,7 +786,11 @@ def satisfies_modal(formula: Node, model: KripkeModel, world: World) -> bool:
     - ``At(i, φ)`` — φ holds at the world named ``i``, regardless of the
       current world (the hybrid satisfaction operator ``@i φ``).
     - ``Not / And / Or / Xor / Implies / Iff`` — the classical truth tables,
-      recursing at the **same** world.
+      recursing at the **same** world; ``Contrast`` as ``And``.
+    - ``Quantifier`` — over the individuals of the world's domain ``D_w``;
+      ``Count`` (``∃≥n`` / ``∃≤n`` / ``∃=n``) — at least / at most / exactly ``n``
+      individuals of ``D_w`` satisfy the matrix (distinct elements, so no identity of
+      terms is needed).
     - ``Box φ`` — φ holds at every ``"alethic"``-successor; ``Diamond φ`` — at
       some ``"alethic"``-successor.
     - ``Knows(a, φ)`` — φ holds at every ``"K:"+a``-successor (universal).
@@ -907,7 +911,7 @@ def satisfies_modal(formula: Node, model: KripkeModel, world: World) -> bool:
     # --- classical connectives (recurse at the same world) ---
     if isinstance(formula, Not):
         return not satisfies_modal(formula.formula, model, world)
-    if isinstance(formula, And):
+    if isinstance(formula, (And, Contrast)):     # Contrast is truth-functionally ∧
         return (satisfies_modal(formula.left, model, world)
                 and satisfies_modal(formula.right, model, world))
     if isinstance(formula, Or):
@@ -1058,6 +1062,19 @@ def satisfies_modal(formula: Node, model: KripkeModel, world: World) -> bool:
         if formula.type in _EXISTS:
             return any(instances)
         raise ValueError(f"satisfies_modal: unknown quantifier type {formula.type!r}")
+
+    # --- counting quantifiers (∃≥n / ∃≤n / ∃=n): how many individuals of the same D_w
+    # satisfy the matrix. Two individuals are two elements of the domain, so counting
+    # needs no identity of terms (which this evaluator does not interpret). A sorted
+    # count arrives relativized, as a Count whose matrix carries the sort guard. ---
+    if isinstance(formula, Count):
+        satisfied = sum(
+            satisfies_modal(substitute(formula.formula, formula.variable, Constant(d)),
+                            model, world)
+            for d in model.domain_at(world))
+        bound = formula.n.value
+        return {"ge": satisfied >= bound, "le": satisfied <= bound,
+                "eq": satisfied == bound}[formula.op]
 
     # --- predicate quantifiers: the body in every model that reinterprets the bound
     # predicate (at every world), like ``Down`` reinterprets a nominal. The evaluation of

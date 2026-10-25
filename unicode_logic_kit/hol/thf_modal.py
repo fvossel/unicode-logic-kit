@@ -157,7 +157,7 @@ from ..fol._free_parameters import free_parameter_names
 from ..fol._numeral_symbols import numerals_as_constants, prefixed_numeral_name
 from ..fol._symbol_names import dedupe
 from ..fol._truth_constants import truth_value
-from ..fol._msfl_nodes import nonempty_sort_axioms, sort_membership_axioms
+from ..fol._msfl_nodes import _reduce_nl_nodes, nonempty_sort_axioms, sort_membership_axioms
 
 # The cross-family bridge REGISTRY is single-sourced from the Isabelle route: the
 # names, the families each bridge needs, and the fact names are shared, so the two
@@ -796,7 +796,9 @@ def to_thf_modal_full(formula: Node, mode: str = "constant", frame: str = "K",
     [formula], _ = numerals_as_constants([formula], where="to_thf_modal_full",
                                          spell=prefixed_numeral_name)
     original = formula
-    formula = formula._relativize([])
+    # A counting quantifier (a sorted one is a guarded Count once relativized) and
+    # Contrast are read by their classical definitions, as fol.qml reads them.
+    formula = _reduce_nl_nodes(formula._relativize([]))
     # Rigid identity (qml's reading): `≠` -> `¬(=)`, a non-binary `=` refused. A formula
     # without an identity atom is returned unchanged, so it emits byte-for-byte as before.
     formula = _lower_identity(formula, "to_thf_modal_full")

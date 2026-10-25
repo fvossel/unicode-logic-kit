@@ -494,6 +494,18 @@ qml_is_valid(pm("□∃x (x = y)"), mode="varying")           # → False
 qml_is_valid(pm("P(y) → P(alice)"), mode="constant")      # → False  (y need not be alice)
 ```
 
+### Counting quantifiers
+
+A counting quantifier `∃≥n` / `∃≤n` / `∃=n` (sorted or not) is read by its first-order definition, the one `to_fol` uses: `∃≥2 x φ` is `∃x0 ∃x1 (φ(x0) ∧ φ(x1) ∧ x0 ≠ x1)`, `∃≤n` is `¬∃≥n+1`, and `∃=n` is both. The witnesses are object quantifiers under the chosen regime, and their distinctness is the rigid identity above. So two distinct objects that are `P` at every successor are still two distinct `P` there, provided the successor's domain holds them. `Contrast` reads as `∧`. The THF, Isabelle and Kripke routes read both the same way; `satisfies_modal` counts the individuals of the world's domain.
+
+```python
+count = pm("∃≥2 x □P(x) → □∃≥2 x P(x)")
+qml_is_valid(count, mode="constant")                       # → True
+qml_is_valid(count, mode="increasing")                     # → True
+qml_is_valid(count, mode="varying")                        # → False  (a witness may be gone)
+qml_equivalent(pm("◇∃=1 x P(x)"), pm("◇∃x (P(x) ∧ ∀y (P(y) → y = x))"))  # → True
+```
+
 ### Testing mixed quantifiers
 
 Quantifier nesting shows regime-dependent effects:

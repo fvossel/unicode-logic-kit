@@ -111,7 +111,7 @@ if TYPE_CHECKING:
     from ..atp.protocol import Verdict
 
 from ._atom_keys import refuse_alike_agents
-from ._msfl_nodes import key_text
+from ._msfl_nodes import _reduce_nl_nodes, key_text
 from ._identifiers import fresh_variables, symbol_names
 from .nodes import (
     Node,
@@ -573,6 +573,11 @@ def standard_translation(formula: Node, world: str = "w",
     formulas of one problem separately and keep that name the same in all of them, pass
     the names of the others as ``avoid``.
 
+    A node the classical layer defines by other nodes is read by that definition, the
+    one :func:`~unicode_logic_kit.fol.nodes.to_fol` applies: ``Contrast`` is ``∧``, and a
+    counting quantifier is its distinct witnesses, so it raises as the object-level
+    quantifier it is.
+
     Raises:
         NotImplementedError: on ``Until`` (not first-order definable), any
             object-level quantifier (first-order modal logic is out of scope for
@@ -581,6 +586,7 @@ def standard_translation(formula: Node, world: str = "w",
             the relation of an agent's operator is named after the agent, so the two
             would be ONE relation and the image would say another thing than ``formula``.
     """
+    formula = _reduce_nl_nodes(formula)
     _check_nominal_collision(formula)
     refuse_alike_agents([formula], "standard_translation")
     variables = {node.name for node in formula.walk() if isinstance(node, Variable)}

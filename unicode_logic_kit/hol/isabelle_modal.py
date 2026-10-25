@@ -159,7 +159,9 @@ from unicode_logic_kit.fol.nodes import (
     Obligatory, Permitted, SortedQuantifier,
 )
 from unicode_logic_kit.fol._fol_nodes import constant_name_to_ascii
-from unicode_logic_kit.fol._msfl_nodes import nonempty_sort_axioms, sort_membership_axioms
+from unicode_logic_kit.fol._msfl_nodes import (
+    _reduce_nl_nodes, nonempty_sort_axioms, sort_membership_axioms,
+)
 from unicode_logic_kit.fol._numeral_symbols import numerals_as_constants, prefixed_numeral_name
 from unicode_logic_kit.fol._symbol_names import SymbolNames, dedupe
 from unicode_logic_kit.fol._truth_constants import truth_value
@@ -1696,7 +1698,9 @@ def isabelle_modal_theory(
     # why "once, up front" also catches a SortedConstant anywhere in the
     # formula, not only directly under a SortedQuantifier).
     original = formula
-    formula = formula._relativize([])
+    # A counting quantifier (a sorted one is a guarded Count once relativized) and
+    # Contrast are read by their classical definitions, as fol.qml reads them.
+    formula = _reduce_nl_nodes(formula._relativize([]))
     # Rigid identity (qml's reading): `≠` -> `¬(=)`, a non-binary `=` refused. A formula
     # without an identity atom is returned unchanged.
     formula = _lower_identity(formula, "to_isabelle_modal")
@@ -1861,7 +1865,7 @@ def modal_axiom_names(
     # Relativize first, same as isabelle_modal_theory — _scan's has_quant flag
     # only needs to know a quantifier occurs, sorted or not, and a sort guard
     # is an ordinary atom to it either way; see that function's comment.
-    relativized = _lower_identity(formula._relativize([]), "modal_axiom_names")
+    relativized = _lower_identity(_reduce_nl_nodes(formula._relativize([])), "modal_axiom_names")
     _scan(relativized, sig)
     names = _names_with_sort_facts(
         relativized, formula,

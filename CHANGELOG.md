@@ -7,6 +7,26 @@ breaking changes.
 
 ## [Unreleased]
 
+A counting quantifier and `Contrast` reach every modal route. Requested by the (F^4)OL project: in its FOLIO validation run, `qml_validity_formula` refused a premise holding `◇(∃=1 x …)`.
+
+### The modal routes read the nodes the classical layer defines
+
+`to_fol` lowers two kinds of node by their definition: the counting quantifiers `∃≥n` / `∃≤n` / `∃=n` (sorted or not) become distinct witnesses, and `Contrast` becomes `∧`. Until now these routes refused both by name (`unsupported node type Count`): `qml_translate`, `qml_validity_formula`, `qml_is_valid`, `qml_equivalent`, both THF exports, `to_isabelle_modal` and `satisfies_modal`. Every modal embedding now reads them by that same definition. The witnesses are object quantifiers under the chosen domain regime, and their distinctness is the rigid identity of the embeddings, so `∃≥2 x □P(x) → □∃≥2 x P(x)` is valid under constant and increasing domains and not under varying or decreasing ones. `standard_translation` reads `Contrast` as `∧` and refuses a count, since a count is an object quantifier. `satisfies_modal` counts the individuals of the world's domain, which needs no identity of terms. A predicate quantifier around a count now also enumerates its instances at the variable the count binds.
+
+### Tests
+
+`tests/test_modal_counting.py` (46 tests):
+- each of the five embeddings gives a count the same output as its definition written out by hand, and gives `Contrast` the output of `∧`;
+- hand-derived verdicts under the four domain regimes;
+- the uniqueness reading of `∃=1` that the request names;
+- sorted counts;
+- a consequence of the request's FOLIO premise;
+- the evaluator on a three-world model, one of whose worlds has an empty domain.
+
+### Documentation
+
+`docs/guide/quantified-modal.md` has a new section on counting quantifiers.
+
 ## [0.34.0] - 2026-10-21
 
 An OWL 2 ontology published as RDF/XML is read directly. The OBO Foundry's ontologies (ENVO, ChEBI, …) and the Open Energy Ontology are published that way, and until now the kit read an ontology only in Functional-Style Syntax or through Hets, which needs Docker. Requested by the (F^4)OL project.
