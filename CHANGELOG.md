@@ -7,6 +7,8 @@ breaking changes.
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-10-25
+
 A counting quantifier and `Contrast` reach every modal route. Requested by the (F^4)OL project: in its FOLIO validation run, `qml_validity_formula` refused a premise holding `◇(∃=1 x …)`.
 
 ### The modal routes read the nodes the classical layer defines
