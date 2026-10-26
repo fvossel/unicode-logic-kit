@@ -73,7 +73,14 @@ jobs:
           # and the SHA256 pin is verified INSIDE the loop, so any mirror that yields
           # the wrong bytes (stub, error page, truncated transfer) moves on to the
           # next one instead of failing the whole job at the integrity gate.
+          #
+          # The /dist/ directory of every mirror holds the CURRENT release only: once a
+          # newer Isabelle is out, the pinned one is gone from all of them (404, or a
+          # redirect to nothing). Every release stays in the archive of its own website,
+          # website-<version>/dist/, served over https without a redirect, so that URL
+          # comes first and keeps working for a pin that is no longer current.
           urls=(
+            "https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist/${ISABELLE_VERSION}_linux.tar.gz"
             "https://dist.isabelle.cit.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz?token=Isabelle"
             "https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist/${ISABELLE_VERSION}_linux.tar.gz"
             "https://isabelle.in.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz"
