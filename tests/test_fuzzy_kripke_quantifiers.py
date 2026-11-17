@@ -139,7 +139,7 @@ def test_a_model_shows_and_keeps_its_individuals():
 # Predicate quantifiers
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("tnorm, loop", itertools.product([LUKASIEWICZ, GODEL], [0.0, 0.25, 0.75, 1.0]))
+@pytest.mark.parametrize("tnorm, loop", list(itertools.product([LUKASIEWICZ, GODEL], [0.0, 0.25, 0.75, 1.0])))
 def test_reflexivity_has_the_degree_of_the_loop(tnorm, loop):
     """``∀P (□P → P)`` at ``w`` has the degree ``R(w, w)``.
 

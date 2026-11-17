@@ -180,7 +180,7 @@ BODIES = ["P ∨ ¬P", "P ∧ ¬P", "P → P ⊗ P", "(P → Q) ∧ (Q → P)", 
           "¬(P ↔ Q) ∨ (P ⊗ Q)", "(P → Q) → Q", "P ⊕ P ⊕ ¬Q"]
 
 
-@pytest.mark.parametrize("body, tnorm, q", itertools.product(BODIES, [L, G], [0.0, 0.25, 0.5, 1.0]))
+@pytest.mark.parametrize("body, tnorm, q", list(itertools.product(BODIES, [L, G], [0.0, 0.25, 0.5, 1.0])))
 def test_the_optimum_bounds_every_value_of_the_body(body, tnorm, q):
     """The infimum is at most, and the supremum at least, the degree of the body at each
     degree of ``P`` on a grid, where ``P`` is an atom of the valuation."""
@@ -190,7 +190,7 @@ def test_the_optimum_bounds_every_value_of_the_body(body, tnorm, q):
     assert evaluate(SO.parse(f"∃P ({body})"), {"Q": q}, tnorm=tnorm) >= max(values)
 
 
-@pytest.mark.parametrize("body, q", itertools.product(BODIES, [0.0, 0.25, 0.5, 1.0]))
+@pytest.mark.parametrize("body, q", list(itertools.product(BODIES, [0.0, 0.25, 0.5, 1.0])))
 def test_the_lukasiewicz_optimum_is_reached_on_the_grid(body, q):
     """The Łukasiewicz connectives are continuous and piecewise linear with integer slopes,
     so for a ``Q`` in eighths the optimum of these bodies lies at a multiple of 1/8."""

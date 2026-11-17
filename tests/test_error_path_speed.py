@@ -87,7 +87,17 @@ def collision_probe(collision_calls, monkeypatch):
     is installed in the environment running the suite: it is a module-level
     global that ``BasicLexer.__init__`` reads at call time, so patching it puts
     the suite in the state the reporter's environment was in.
+
+    The parser is built BEFORE the flag is forced. Building it is not what the
+    tests here measure, and lark's lexer constructors read the flag too: forced
+    on where interegular is not installed (the CI, this venv), they reach for
+    the missing module and raise NameError; where it is installed, the count
+    would include the construction. The kit caches its parsers per process, so
+    without this the tests passed or failed by whether an earlier test in the
+    same process had happened to build the parser already.
     """
+    MSFLParser()
+    collision_calls.clear()
     monkeypatch.setattr(lark.lexer, "has_interegular", True, raising=False)
     naming._ERROR_LEXERS.clear()
     return collision_calls
@@ -281,7 +291,13 @@ def test_a_postlex_grammar_takes_the_fallback(monkeypatch):
 
     parser = MSFLParser().parser
     postlex = DroppingPostlex()
-    monkeypatch.setattr(parser.options, "postlex", postlex)
+    # LarkOptions keeps every option in its ``options`` dict and forwards
+    # attribute access there through __getattr__ / __setattr__, so the value
+    # is patched in that dict. A setattr on the object would rest on how
+    # monkeypatch restores an attribute that is not in the instance __dict__:
+    # pytest 9.2 deletes it on undo, which LarkOptions refuses, and the
+    # stub then stays on the parser every later test in the process shares.
+    monkeypatch.setitem(parser.options.options, "postlex", postlex)
     # Without this the test passes for the wrong reason: _error_lexer consults
     # its cache BEFORE it looks at postlex, so a _UNAVAILABLE entry left by an
     # earlier test in this file sends the call down the fallback anyway. It did

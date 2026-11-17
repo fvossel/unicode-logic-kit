@@ -325,7 +325,7 @@ def test_the_modal_operators_stand_over_fuzzy_connectives(order):
         Knows(Constant("alice"), P), LukNegation(Knows(Constant("alice"), P)))
 
 
-@pytest.mark.parametrize("order, many_sorted", itertools.product([1, 2, 3], [False, True]))
+@pytest.mark.parametrize("order, many_sorted", list(itertools.product([1, 2, 3], [False, True])))
 def test_a_bare_lower_case_word_is_a_nominal_in_a_modal_fuzzy_mode(order, many_sorted):
     """As in the classical modal modes, and it needs the same second parser: ``(p → q)``
     is the shape the first one misreads."""
@@ -335,7 +335,7 @@ def test_a_bare_lower_case_word_is_a_nominal_in_a_modal_fuzzy_mode(order, many_s
         LukImplication(Nominal("p"), Nominal("q")), Nominal("p"))
 
 
-@pytest.mark.parametrize("order, many_sorted", itertools.product([1, 2, 3], [False, True]))
+@pytest.mark.parametrize("order, many_sorted", list(itertools.product([1, 2, 3], [False, True])))
 def test_a_fuzzy_mode_without_the_modal_family_has_no_modal_operator(order, many_sorted):
     p = parser(order, False, many_sorted)
     assert not p._hybrid
@@ -346,7 +346,7 @@ def test_a_fuzzy_mode_without_the_modal_family_has_no_modal_operator(order, many
         p.parse("(p → q) ∧ p")
 
 
-@pytest.mark.parametrize("order, many_sorted", itertools.product([1, 2, 3], [False, True]))
+@pytest.mark.parametrize("order, many_sorted", list(itertools.product([1, 2, 3], [False, True])))
 def test_a_free_agent_is_a_named_agent_and_a_bound_one_a_variable(order, many_sorted):
     p = parser(order, True, many_sorted)
     assert p.parse("K_a P") == Knows(Constant("a"), P)
@@ -368,7 +368,7 @@ def test_a_quantifier_sign_before_a_predicate_binds_the_predicate_in_a_modal_mod
 # Second and third order
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("modal, many_sorted", itertools.product([False, True], repeat=2))
+@pytest.mark.parametrize("modal, many_sorted", list(itertools.product([False, True], repeat=2)))
 def test_the_arity_of_a_bound_predicate_is_read_from_its_body(modal, many_sorted):
     p = parser(2, modal, many_sorted)
     assert p.parse("∀P (P ⊗ P → P)").arity == 0
@@ -378,14 +378,14 @@ def test_the_arity_of_a_bound_predicate_is_read_from_its_body(modal, many_sorted
         p.parse("∀P (P(x) → P(x, y))")
 
 
-@pytest.mark.parametrize("modal, many_sorted", itertools.product([False, True], repeat=2))
+@pytest.mark.parametrize("modal, many_sorted", list(itertools.product([False, True], repeat=2)))
 def test_a_predicate_in_argument_position_is_third_order(modal, many_sorted):
     with pytest.raises(NamingError):
         parser(2, modal, many_sorted).parse("Pos(G)")
     assert parser(3, modal, many_sorted).parse("Pos(G)") == Atom("Pos", [PredicateTerm("G")])
 
 
-@pytest.mark.parametrize("modal, many_sorted", itertools.product([False, True], repeat=2))
+@pytest.mark.parametrize("modal, many_sorted", list(itertools.product([False, True], repeat=2)))
 def test_a_lambda_term_in_argument_position_has_a_fuzzy_body(modal, many_sorted):
     node = parser(3, modal, many_sorted).parse("Pos(λx. ¬G(x))")
     assert node == Atom("Pos", [Lambda(LambdaVar("x"),
@@ -393,7 +393,7 @@ def test_a_lambda_term_in_argument_position_has_a_fuzzy_body(modal, many_sorted)
     assert node.to_unicode_str() == "Pos(λx. ¬G(x))"
 
 
-@pytest.mark.parametrize("modal, many_sorted", itertools.product([False, True], repeat=2))
+@pytest.mark.parametrize("modal, many_sorted", list(itertools.product([False, True], repeat=2)))
 def test_a_third_order_fuzzy_mode_types_its_argument_slots(modal, many_sorted):
     """One slot holds an individual or a property, as in the classical third-order modes."""
     individual = "alice:S" if many_sorted else "alice"
