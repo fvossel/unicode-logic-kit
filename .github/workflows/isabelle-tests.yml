@@ -62,34 +62,47 @@ jobs:
 
       - name: Download & extract Isabelle
         if: steps.cache-isabelle.outputs.cache-hit != 'true'
+        # A download and extraction takes about a minute on a runner. The limit
+        # leaves room for every source below to stall in turn before the last one
+        # answers, and stops a source that hangs from eating the job.
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           cd "$HOME"
-          # The TUM server has real outages, and its canonical /dist/ URL 301s to an
-          # http:// CDN address that curl will not follow (protocol downgrade) — it
-          # then writes a stub file and still exits 0, so a mirror loop that only
-          # checks curl's exit status accepts the failure and never falls through.
-          # Two consequences are handled here: the CDN is listed directly over https,
-          # and the SHA256 pin is verified INSIDE the loop, so any mirror that yields
-          # the wrong bytes (stub, error page, truncated transfer) moves on to the
-          # next one instead of failing the whole job at the integrity gate.
+          # The sources are tried in turn, and the SHA256 pin is verified INSIDE the
+          # loop: a source that yields the wrong bytes (stub, error page, truncated
+          # transfer) moves on to the next one instead of failing the whole job at
+          # the integrity gate. curl gives up on a source that does not connect
+          # within 30 s or sends less than 1 MiB/s for a minute (a real outage of
+          # the TUM server looks like that).
           #
-          # The /dist/ directory of every mirror holds the CURRENT release only: once a
-          # newer Isabelle is out, the pinned one is gone from all of them (404, or a
-          # redirect to nothing). Every release stays in the archive of its own website,
-          # website-<version>/dist/, served over https without a redirect, so that URL
-          # comes first and keeps working for a pin that is no longer current.
-          urls=(
-            "https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist/${ISABELLE_VERSION}_linux.tar.gz"
-            "https://dist.isabelle.cit.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz?token=Isabelle"
+          # Only the archive of a release's own website, website-<version>/dist/,
+          # keeps that release once a newer one is out: every /dist/ directory holds
+          # the CURRENT release only and answers 404 for an older pin. So the archive
+          # comes first, and the other sources serve only while the pin is current.
+          #
+          # The canonical /dist/ URL redirects to the CDN that serves the release,
+          # but over http://, which curl will not follow (protocol downgrade) and
+          # the CDN does not even answer. The CDN host has moved before (dist. to
+          # dists.), so it is not written down here: it is read from that redirect
+          # and asked for over https.
+          canonical="https://isabelle.in.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz"
+          cdn=$(curl -sSI --connect-timeout 30 --max-time 60 "$canonical" \
+                  | tr -d '\r' | awk 'tolower($1) == "location:" { print $2 }') || cdn=""
+          urls=("https://isabelle.in.tum.de/website-${ISABELLE_VERSION}/dist/${ISABELLE_VERSION}_linux.tar.gz")
+          case "$cdn" in
+            http://*|https://*) urls+=("https://${cdn#*://}") ;;
+          esac
+          urls+=(
             "https://www.cl.cam.ac.uk/research/hvg/Isabelle/dist/${ISABELLE_VERSION}_linux.tar.gz"
-            "https://isabelle.in.tum.de/dist/${ISABELLE_VERSION}_linux.tar.gz"
+            "$canonical"
           )
           ok=""
           for url in "${urls[@]}"; do
             echo "Downloading $url"
             rm -f isabelle.tar.gz
             if ! curl -fSL --proto-redir =https --connect-timeout 30 \
+                   --speed-limit 1048576 --speed-time 60 \
                    --retry 3 --retry-all-errors -o isabelle.tar.gz "$url"; then
               echo "::warning::download failed from $url - trying next mirror"
               continue
